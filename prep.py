@@ -17,19 +17,31 @@ import mne
 import pandas as pd
 from mne import *
 
+from pathlib import Path
+import os, mne
+
 # %%
 raw = mne.io.read_raw_fif("/Users/maryamvalian/Data/ds005810/sub-01/ses-ImageNet01/meg/sub-01_ses-ImageNet01_task-ImageNet_run-01_meg.fif", preload=False)
 #raw.info["bads"]  
 raw
 
 # %%
-p=raw.plot(n_channels=40, duration=10)
+clean= mne.io.read_raw_fif("/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/raw/sub-01_ses-ImageNet01_task-ImageNet_run-01_meg_clean.fif", preload=False)
+#clean
+
+# %%
+#p=clean.plot(n_channels=40, duration=10)
 
 # %%
 events = find_events(raw, stim_channel="UPPT001")
 
 
 fig = mne.viz.plot_events(events, sfreq=raw.info["sfreq"], first_samp=raw.first_samp)
+#ID:  
+#1 begin
+#2 stim_on
+#4 response
+#8 end
 
 # %%
 fig = mne.viz.plot_events(
@@ -37,6 +49,8 @@ fig = mne.viz.plot_events(
     sfreq=raw.info["sfreq"],
     
 )
+#2: stim_om
+#4 resp
 
 # %%
 events[120]
@@ -58,6 +72,29 @@ meta = pd.read_csv("/Users/maryamvalian/Data/ds005810/derivatives/detailed_event
 meta.head()
 
 # %%
-meta.iloc[3]
+meta.tail()
+
+# %%
+meta.iloc[3995,7]
+
+# %%
+meta['session'].value_counts()
+
+# %%
+meta.groupby(['session','run'])['image_id'].count().sort_index()
+
+# %%
+meta[['stim_is_animate','resp_is_right']].mean(numeric_only=True)  
+
+# %%
+m01r1 = meta[(meta['session']=='ImageNet01') & (meta['run']==1)].copy()
+
+m01r1.tail()
+
+# %%
+len(m01r1)
+
+# %%
+m01r1[['stim_is_animate','resp_is_right']].mean(numeric_only=True)  
 
 # %%
