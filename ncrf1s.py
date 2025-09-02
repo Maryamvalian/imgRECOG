@@ -21,13 +21,17 @@ from pathlib import Path
 import numpy as np
 from eelbrain import NDVar, UTS
 from eelbrain import plot, combine
+from eelbrain import *
 
 # %%
 subject="sub-01"
 root = Path("~/Data/ds005810")
+subjects_dir = root / "derivatives" / "freesurfer" / "subjects"
 #clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-ImageNet01_task-ImageNet_run-01_meg_clean.fif"
 raw_fif=root/f"{subject}/ses-ImageNet01/meg/{subject}_ses-ImageNet01_task-ImageNet_run-01_meg.fif"
 empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-noise_meg.fif"
+
+mne_out = Path("/Users/maryamvalian/Data/ds005810/derivatives/mne")
 
 # %%
 raw = mne.io.read_raw_fif(raw_fif, preload=True)
@@ -51,6 +55,7 @@ meta_r1 = meta[(meta['session'] == 'ImageNet01') & (meta['run'] == 1)].reset_ind
 
 # %%
 n=len(meta_r1)
+n
 
 # %%
 anim_flags = meta_r1.loc[:n-1, 'stim_is_animate'].to_numpy().astype(bool)
@@ -66,9 +71,6 @@ event_table = pd.DataFrame({
 event_table
 
 # %%
-meg.first_time   
-
-# %%
 meg=raw.pick("meg")
 meg.filter(1., 40., phase="zero-double", verbose=False)
 meg.resample(100, npad="auto", verbose=False)
@@ -81,8 +83,8 @@ n_times = meg.n_times
 time = UTS(0, 1/sfreq, n_times)
 
 
-stim1 = np.zeros(n_times, dtype=float)  #inanimate
-stim2 = np.zeros(n_times, dtype=float)  #animate
+stim1 = np.zeros(n_times, dtype=float)  
+stim2 = np.zeros(n_times, dtype=float) 
 
 
 for t, is_anim in zip(event_table['time'], event_table['animate']):
@@ -101,6 +103,9 @@ stim2 = NDVar(stim2, time)
 p=plot.LineStack(combine([stim1, stim2]), ylabels=["inanimate", "animate"], offset=1.5)
 
 # %%
+meg.first_time   
+
+# %%
 stim1.x
 
 # %%
@@ -117,5 +122,129 @@ raw_er.resample(100, npad="auto", verbose=False)
 noise_cov = mne.compute_raw_covariance(raw_er, method='shrunk', rank=None,verbose=False)
 noise_cov
 
+# %% [markdown]
+# # Lead FIeld
+
 # %%
-raw_er.filter(1., 40., phase="zero-double", verbose=False)
+src_file = mne_out / subject / f"{subject}-vol7-src.fif"
+src = mne.read_source_spaces(str(src_file))
+
+# %%
+src
+
+# %%
+meg
+
+# %%
+import eelbrain
+SUBJECTS_DIR = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
+
+fwd = mne.read_forward_solution(
+    "/Users/maryamvalian/Data/ds005810/derivatives/mne/sub-01/sub-01-fwd.fif"
+)
+
+eelbrain.load.update_subjects_dir(obj=None,subjects_dir=SUBJECTS_DIR)
+
+# %%
+meg_ndvar = load.fiff.raw_ndvar(meg)
+meg_ndvar
+
+# %%
+#fwd_file = mne_out / subject / f"{subject}-fwd.fif"
+#fwd = mne.read_forward_solution(str(fwd_file))
+#convert to ndvar
+lf = load.mne.forward_operator(fwd,src='vol-7', subjects_dir=SUBJECTS_DIR,connectivity=False,parc='aparc+aseg') 
+lf  = lf.sub(sensor=meg_ndvar.sensor)
+lf
+
+# %%
+print(f"Fitting NCRF")
+args = (
+            meg_ndvar,
+            [stim1,stim2],
+            lf,
+            noise_cov,
+            0,
+            0.8,
+        )
+kwargs = {'normalize': 'l1',
+                  'in_place': False,
+                  'mu':1e-4,
+                  'verbose': True, 
+                  'n_iter': 3,
+                  'n_iterc': 3,
+                  'n_iterf': 10} 
+model = fit_ncrf(*args, **kwargs)  
+
+hlist=model.h
+hlist
+
+# %%
+h = hlist[0]
+"""                        
+h_fsavg = morph_source_space(
+    h,
+    subject_to='fsaverage',
+    copy=True
+    )
+h_fsavg_smooth = h_fsavg.smooth('source', 0.01, 'gaussian')
+
+"""
+h = h.smooth('source', 0.01, 'gaussian')
+p = plot.Butterfly(h.norm('space'), color='k')
+times = [0.12,0.17,0.25,0.41,0.55]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(h.sub(time=t),title=f"ALL words, {t}s")  
+
+# %% [markdown]
+# ## MNE inverse
+
+# %%
+inv = mne.minimum_norm.make_inverse_operator(
+    info=raw.info, forward=fwd, noise_cov=noise_cov,
+    loose=1.0,    # fixed orientation (good for volume source spaces)
+    depth=0.8,
+    fixed=False
+)
+
+# %%
+raw = mne.io.read_raw_fif(raw_fif, preload=True)
+
+events = find_events(raw, stim_channel="UPPT001")
+
+epochs = mne.Epochs(raw, events, tmin=-0.1, tmax=0.8, baseline=(-0.1, 0))
+
+evoked = epochs.average()
+
+
+p=evoked.plot()
+
+
+evoked.plot_topomap(times=[0.1, 0.2, 0.3], ch_type="mag")
+
+# %%
+snr = 3.0
+lambda2 = 1.0 / snr**2
+
+stc_vec = mne.minimum_norm.apply_inverse(
+    evoked,
+    inv,
+    lambda2=lambda2,
+    method="MNE",        
+    pick_ori="vector",  
+)
+
+# %%
+stc_vec
+
+# %%
+p = plot.Butterfly(stc_mag, color='k')
+times = [0.12,0.17,0.25,0.41,0.55]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(stc_vec.sub(time=t),title=f"ALL words, {t}s") 
+
+# %%
