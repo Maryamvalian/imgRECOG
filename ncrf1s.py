@@ -26,12 +26,12 @@ from eelbrain import *
 # %%
 subject="sub-01"
 root = Path("~/Data/ds005810")
-#subjects_dir = root / "derivatives" / "freesurfer" / "subjects"
+
 #clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-ImageNet01_task-ImageNet_run-01_meg_clean.fif"
 raw_fif=root/f"{subject}/ses-ImageNet01/meg/{subject}_ses-ImageNet01_task-ImageNet_run-01_meg.fif"
 empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-noise_meg.fif"
 
-#mne_out = Path("/Users/maryamvalian/Data/ds005810/derivatives/mne")
+
 
 subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
 
@@ -126,7 +126,7 @@ noise_cov
 # # Lead FIeld
 
 # %%
-src_file = subjects_dir / subject / f"bem/{subject}-vol-7-src.fif"
+src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
 src = mne.read_source_spaces(str(src_file),verbose=False)
 src
 
@@ -263,80 +263,3 @@ for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(morphed_stc.sub(time=t),title=f"stim_on morphed, {t}s") 
-
-# %%
-inv['src']
-
-# %%
-stc_vec
-
-# %%
-from mne import compute_source_morph
-
-fs_src = mne.read_source_spaces(f"{subjects_dir}/fsaverage/bem/fsaverage-vol-7-src.fif")
-
-morph = compute_source_morph(
-    src=inv['src'],                 
-    subject_from=subject,          
-    subject_to='fsaverage',
-    subjects_dir=SUBJECTS_DIR,
-    verbose=False,
-    #src_to=fs_src
-)
-
-
-stc_vec_fs = morph.apply(stc_vec, mri_resolution=True)       #
-
-
-stc_ndvar = load.mne.stc_ndvar(
-    stc_vec_fs,                    
-    src='vol-7' ,         
-    subjects_dir=SUBJECTS_DIR,
-    subject='fsaverage',             #  <=======
-)
-
-# %%
-inv['src']
-
-# %%
-fs_src
-
-# %%
-stc_vec
-
-# %%
-stc_vec_fs
-
-# %%
-p = plot.Butterfly(stc_ndvar.norm('space'), color='k')
-times = [0.12,0.17,0.25,0.41,0.55,0.63]
-for t in times:
-    p.add_vline(t)
-for t in times:
-    f = plot.GlassBrain(stc_ndvar.sub(time=t),title=f"stim_on morphed, {t}s") 
-
-# %%
-"""
-fs_src = mne.setup_volume_source_space(
-    subject='fsaverage', subjects_dir=SUBJECTS_DIR,
-    pos=7.0, mri='aseg.mgz', verbose=False
-)
-mne.write_source_spaces(
-    f"{SUBJECTS_DIR}/fsaverage/bem/M-aseg-fsaverage-vol-7-src.fif",
-    fs_src, overwrite=True
-)
-"""
-
-# %%
-
-# %%
-fs = mne.read_source_spaces(
-    f"{subjects_dir}/fsaverage/bem/fsaverage-vol-7-src.fif"
-)
-fs
-
-# %%
-fs2 = mne.read_source_spaces(
-    f"{subjects_dir}/fsaverage/bem/1_fsaverage-vol-7-src.fif"
-)
-fs2
