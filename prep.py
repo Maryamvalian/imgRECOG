@@ -35,7 +35,6 @@ clean= mne.io.read_raw_fif("/Users/maryamvalian/Data/ds005810/derivatives/prepro
 # %%
 events = find_events(raw, stim_channel="UPPT001")
 
-
 fig = mne.viz.plot_events(events, sfreq=raw.info["sfreq"], first_samp=raw.first_samp)
 #ID:  
 #1 begin
@@ -51,9 +50,6 @@ fig = mne.viz.plot_events(
 )
 #2: stim_om
 #4 resp
-
-# %%
-events[120]
 
 # %%
 
@@ -200,7 +196,7 @@ coreg = Coregistration(
     fiducials=fids_list,
 )
 
-coreg.set_scale_mode("none")                #"uniform"
+coreg.set_scale_mode("uniform")                #"uniform"
 
 
 coreg.fit_fiducials()
@@ -208,7 +204,7 @@ coreg.fit_fiducials()
 coreg.fit_icp(n_iterations=50)
 
 
-out_trans = f"{subjects_dir}/{subject}/{subject}-trans.fif"
+out_trans = f"{root}/derivatives/trans/{subject}-trans.fif"
 mne.write_trans(out_trans, coreg.trans, overwrite=True)
 
 # %%
@@ -216,6 +212,10 @@ coreg.trans
 
 # %%
 coreg.scale
+
+# %%
+scale=coreg.scale
+mne.scale_mri('fsaverage', subject, scale, subjects_dir=SUBJECTS_DIR, labels=False)
 
 # %% [markdown]
 # ### 4. create src
@@ -249,5 +249,24 @@ fwd = mne.make_forward_solution(
     meg=True, eeg=False, mindist=0.0
 )
 mne.write_forward_solution(mne_out/subject/f"{subject}-fwd.fif", fwd, overwrite=True)
+
+# %% [markdown]
+# ## after scale subject ( renamed old folder to sun-01_old)
+
+# %%
+src_sb01 = mne.read_source_spaces(
+    f"{SUBJECTS_DIR}/sub-01/bem/sub-01-vol-7-src.fif"
+)
+
+# %%
+src_sb01
+
+# %%
+src_2 = mne.read_source_spaces(
+    f"{root}/derivatives/freesurfer/sub-01_old/bem/sub-01-vol-7-src.fif" #befor scale_subject
+)
+
+# %%
+src_2
 
 # %%
