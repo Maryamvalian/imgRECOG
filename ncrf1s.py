@@ -27,7 +27,7 @@ from eelbrain import *
 subject="sub-01"
 root = Path("~/Data/ds005810")
 
-#clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-ImageNet01_task-ImageNet_run-01_meg_clean.fif"
+clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-ImageNet01_task-ImageNet_run-01_meg_clean.fif"
 raw_fif=root/f"{subject}/ses-ImageNet01/meg/{subject}_ses-ImageNet01_task-ImageNet_run-01_meg.fif"
 empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-noise_meg.fif"
 
@@ -37,10 +37,10 @@ subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expan
 
 # %%
 raw = mne.io.read_raw_fif(raw_fif, preload=True,verbose=False)
-
+clean= mne.io.read_raw_fif(clean_fif, preload=True,verbose=False)
 events = find_events(raw, stim_channel="UPPT001")
 #raw.info["bads"]  
-raw
+clean
 #raw.n_times
 
 # %%
@@ -200,7 +200,7 @@ h= morph_source_space(
 
 h = h.smooth('source', 0.01, 'gaussian')
 p = plot.Butterfly(h.norm('space'), color='k')
-times = [0.12,0.17,0.25,0.41,0.55]
+times = [0.12,0.17,0.24,0.37,0.48,0.55,0.66,0.77]
 for t in times:
     p.add_vline(t)
 for t in times:
@@ -210,8 +210,14 @@ for t in times:
 # ## MNE inverse
 
 # %%
+clean.filter(1., 40., phase="zero-double", verbose=False)
+clean.resample(100, npad="auto", verbose=False)
+clean_ndvar = load.fiff.raw_ndvar(meg)
+clean_ndvar
+
+# %%
 epochs =mne.Epochs(
-    meg, events,
+    clean, events,          #_____
     tmin=-0.1,tmax=0.8,
     
     event_id={'stim_on': 2},
@@ -221,7 +227,7 @@ epochs =mne.Epochs(
 evoked = epochs.average()
 
 inv= mne.minimum_norm.make_inverse_operator(
-    info=raw.info, forward=fwd, noise_cov=noise_cov,
+    info=clean.info, forward=fwd, noise_cov=noise_cov,   #_____
     loose=1.0,    
     depth=0.8,
     fixed=False,
@@ -258,8 +264,115 @@ morphed_stc = morph_source_space(
 
 # %%
 p = plot.Butterfly(morphed_stc.norm('space'), color='k')
-times = [0.12,0.17,0.25,0.41,0.55,0.63]
+times = [0.12,0.17,0.24,0.37,0.48,0.55,0.66,0.77]
 for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(morphed_stc.sub(time=t),title=f"stim_on morphed, {t}s") 
+
+# %%
+clean=clean.pick("meg")
+clean.filter(1., 40., phase="zero-double", verbose=False)
+clean.resample(100, npad="auto", verbose=False)
+
+sfreq = clean.info['sfreq']     #100       
+n_times = clean.n_times         #32000     
+
+clean_ndvar = load.fiff.raw_ndvar(clean)
+print(f"MEG: {clean_ndvar}")
+     
+
+
+time = UTS(0, 1/sfreq, n_times)      #from 0 to 32000/100=320 s
+
+
+stim1 = np.zeros(n_times, dtype=float)  
+stim2 = np.zeros(n_times, dtype=float) 
+
+
+for t, is_anim in zip(event_table['time'], event_table['animate']):
+    idx = int(round((t ) * sfreq))
+    if 0 <= idx < n_times:
+        if is_anim:
+            stim2[idx] = 1.0
+        else:
+            stim1[idx] = 1.0
+
+
+stim1 = NDVar(stim1, time)
+stim2 = NDVar(stim2, time)
+
+# %%
+mindist=0 #same src size for all subjects
+bem_model = mne.make_bem_model(subject, ico=4, conductivity=(0.3,),verbose=False)
+bem_sol   = mne.make_bem_solution(bem_model,verbose=False)
+
+trans_fif= f"{root}/derivatives/trans/{subject}-trans.fif"
+trans=mne.read_trans(trans_fif)
+
+fwd = mne.make_forward_solution(clean.info,trans ,
+                                src, bem_sol,
+                                meg=True, eeg=False,
+                                mindist=mindist,
+                                verbose=False
+                               )
+print(fwd)
+
+
+
+#convert mne fwd to ndvar
+lf = load.mne.forward_operator(fwd,src='vol-7',
+                               subjects_dir=subjects_dir,
+                               connectivity=False,parc='aparc+aseg') 
+lf  = lf.sub(sensor=clean_ndvar.sensor)
+lf
+
+# %%
+
+args = (
+            clean_ndvar,
+            [stim1,stim2],
+            lf,
+            noise_cov,
+            0,
+            0.8,
+        )
+kwargs = {'normalize': 'l1',
+                  'in_place': False,
+                  'mu':'auto',
+                  'verbose': True, 
+                  'n_iter': 10,
+                  'n_iterc': 10,
+                  'n_iterf': 100} 
+model = fit_ncrf(*args, **kwargs)  
+
+#---------------
+save_dir = Path('base_ncrf')
+save_dir.mkdir(exist_ok=True)
+
+filename = save_dir / f"{subject}.pickle"
+save.pickle(model, filename)
+
+hlist=model.h
+hlist
+
+# %%
+h = hlist[0]
+                      
+
+h= morph_source_space(
+    h,
+    subject_to='fsaverage',
+    copy=True,
+    
+    )
+
+
+
+h = h.smooth('source', 0.01, 'gaussian')
+p = plot.Butterfly(h.norm('space'), color='k')
+times = [0.12,0.17,0.24,0.37,0.48,0.55,0.66,0.77]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(h.sub(time=t),title=f"ALL words, {t}s")  
