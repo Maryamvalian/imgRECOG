@@ -17,6 +17,8 @@ from experiment import ImageNet
 
 root = '~/Data/ds005810'
 e = ImageNet(root)
+
+
 #e.set(rej='')
 # print(e.load_evoked(subjects=-1, data='meg'))
 #print(e.load_test('connection', 0.3, 0.5, 0.05, data='meg', baseline=False, epoch='target', make=True))
