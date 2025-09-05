@@ -151,27 +151,29 @@ print("mri_watershed   =", shutil.which("mri_watershed"))  # should NOT be None
 # ### 2. MAKE bem sol
 
 # %%
+#Creats BEM folder and files
+
 subjects_dir = os.environ["SUBJECTS_DIR"]
+
 # for all subjects after recon-all is done! range (1,31)
-for i in range(6, 11):
+for i in range(1, 2):
     
     subject = f"sub-{i:02d}"
     print(f"Creating BEM for {subject}...")
     
     
-    #Create scalp/outer-/inner-skull surfaces
-    mne.bem.make_watershed_bem(subject=subject, subjects_dir=subjects_dir, overwrite=True)
+    #Creats scalp/outer-/inner-skull surfaces
+    mne.bem.make_watershed_bem(subject=subject, subjects_dir=subjects_dir, overwrite=True,verbose=False)
     
     # single-layer for MEG! 
     model = mne.make_bem_model(subject=subject, subjects_dir=subjects_dir,
-                               ico=5, conductivity=(0.3,))
+                               ico=5, conductivity=(0.3,),verbose=False)
     bem = mne.make_bem_solution(model)
     
     out_bem = f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
-    mne.write_bem_solution(out_bem, bem, overwrite=True)
+    mne.write_bem_solution(out_bem, bem, overwrite=True,verbose=False)
+    print("bem-sol.fif saved successfully.")
 
-
-# %%
 
 # %% [markdown]
 # ### 3. Coreg
