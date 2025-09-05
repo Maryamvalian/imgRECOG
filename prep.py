@@ -128,14 +128,10 @@ mne.write_source_spaces(
 # ### 1. Set up home 
 
 # %%
-#set up Ffreesurfer home environment
-
 import  shutil
 
-subject="sub-01"
-root = Path("~/Data/ds005810")
-subjects_dir = root / "derivatives" / "freesurfer" / "subjects"
-
+#root = Path("~/Data/ds005810")
+#subjects_dir = root / "derivatives" / "freesurfer" / "subjects"
 FS_HOME = "/Applications/freesurfer/8.1.0"
 SUBJECTS_DIR = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
 
@@ -144,11 +140,9 @@ os.environ["SUBJECTS_DIR"] = SUBJECTS_DIR
 os.environ["FS_LICENSE"] = f"{FS_HOME}/.license"  # you put it here; keeps things explicit
 os.environ["PATH"] = f"{FS_HOME}/bin:" + os.environ.get("PATH", "")
 
-# Tell MNE as well (sets both mne config and env)
 mne.set_config("FREESURFER_HOME", FS_HOME, set_env=True)
 mne.set_config("SUBJECTS_DIR", SUBJECTS_DIR, set_env=True)
 
-# Sanity checks
 print("FREESURFER_HOME =", os.environ.get("FREESURFER_HOME"))
 print("SUBJECTS_DIR    =", os.environ.get("SUBJECTS_DIR"))
 print("mri_watershed   =", shutil.which("mri_watershed"))  # should NOT be None
@@ -157,20 +151,27 @@ print("mri_watershed   =", shutil.which("mri_watershed"))  # should NOT be None
 # ### 2. MAKE bem sol
 
 # %%
-subject = "sub-01"
 subjects_dir = os.environ["SUBJECTS_DIR"]
+# for all subjects after recon-all is done! range (1,31)
+for i in range(6, 11):
+    
+    subject = f"sub-{i:02d}"
+    print(f"Creating BEM for {subject}...")
+    
+    
+    #Create scalp/outer-/inner-skull surfaces
+    mne.bem.make_watershed_bem(subject=subject, subjects_dir=subjects_dir, overwrite=True)
+    
+    # single-layer for MEG! 
+    model = mne.make_bem_model(subject=subject, subjects_dir=subjects_dir,
+                               ico=5, conductivity=(0.3,))
+    bem = mne.make_bem_solution(model)
+    
+    out_bem = f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
+    mne.write_bem_solution(out_bem, bem, overwrite=True)
 
-# 1) Create scalp/outer-/inner-skull surfaces via FreeSurfer's mri_watershed
-mne.bem.make_watershed_bem(subject=subject, subjects_dir=subjects_dir, overwrite=True)
-
-# 2) Build a single-layer MEG BEM (brain, 0.3 S/m) and the solution
-model = mne.make_bem_model(subject=subject, subjects_dir=subjects_dir,
-                           ico=5, conductivity=(0.3,))
-bem = mne.make_bem_solution(model)
 
 # %%
-out_bem = f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
-mne.write_bem_solution(out_bem, bem, overwrite=True)
 
 # %% [markdown]
 # ### 3. Coreg

@@ -5,8 +5,8 @@ from eelbrain.pipeline import *
 class ImageNet(MneExperiment):
 
     ignore_entities = {
-        'ignore_runs': ('2', '3'),
-        #'ignore_sessions': 'mri',
+        #'ignore_runs': ('2', '3'),
+        'ignore_sessions': 'mri',
     }
 
     raw = {
@@ -21,9 +21,9 @@ class ImageNet(MneExperiment):
 
     epochs = {
         # 'target': PrimaryEpoch('ImageNet', "(event == 'stim_on')",
-         # 'target': PrimaryEpoch ((vent == 'resp')", samplingrate=251.005),
+       
         'stim_on': PrimaryEpoch('ImageNet', "event == 'stim_on'", samplingrate=200),
-        # 'resp': SecondaryEpoch('target', "event == 'stim_on'"),
+       
     }
 
     tests = {
