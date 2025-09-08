@@ -109,17 +109,19 @@ mne.datasets.fetch_fsaverage(subjects_dir=str(subjects_dir))
 
 # %%
 #to create fsaverage-vol-7-src.fif in the fsaverage/bem : 
+"""
 src_vol = mne.setup_volume_source_space(
     subject="fsaverage",
     subjects_dir=str(subjects_dir),
     pos=7.0,            
     mri="aparc+aseg.mgz",
-    verbose=True
+    verbose=False,
 )
 mne.write_source_spaces(
-    subjects_dir / "fsaverage" / "bem" / "fsaverage-vol-7-src.fif",
+    f"{subjects_dir}/fsaverage/bem/fsaverage-vol-7-src.fif",
     src_vol, overwrite=True
 )
+"""
 
 # %% [markdown]
 # # AFTER RECON-all by freesurfer
@@ -130,14 +132,11 @@ mne.write_source_spaces(
 # %%
 import  shutil
 
-#root = Path("~/Data/ds005810")
-#subjects_dir = root / "derivatives" / "freesurfer" / "subjects"
-FS_HOME = "/Applications/freesurfer/8.1.0"
 SUBJECTS_DIR = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
 
 os.environ["FREESURFER_HOME"] = FS_HOME
 os.environ["SUBJECTS_DIR"] = SUBJECTS_DIR
-os.environ["FS_LICENSE"] = f"{FS_HOME}/.license"  # you put it here; keeps things explicit
+os.environ["FS_LICENSE"] = f"{FS_HOME}/.license"  
 os.environ["PATH"] = f"{FS_HOME}/bin:" + os.environ.get("PATH", "")
 
 mne.set_config("FREESURFER_HOME", FS_HOME, set_env=True)
@@ -145,7 +144,7 @@ mne.set_config("SUBJECTS_DIR", SUBJECTS_DIR, set_env=True)
 
 print("FREESURFER_HOME =", os.environ.get("FREESURFER_HOME"))
 print("SUBJECTS_DIR    =", os.environ.get("SUBJECTS_DIR"))
-print("mri_watershed   =", shutil.which("mri_watershed"))  # should NOT be None
+print("mri_watershed   =", shutil.which("mri_watershed"))  
 
 # %% [markdown]
 # ### 2. MAKE bem sol
@@ -179,18 +178,35 @@ for i in range(1, 2):
 # ### 3. Coreg
 
 # %%
-#First set fiducials with mne coreg GUI and save as fiducials.fif
+subject="sub-03"
+raw = mne.io.read_raw_fif(f"/Users/maryamvalian/Data/ds005810/{subject}/ses-ImageNet01/meg/{subject}_ses-ImageNet01_task-ImageNet_run-01_meg.fif", preload=False)
+
+
+subjects_dir
+
+# %% [markdown]
+# # COREG GUI
+
+# %%
+#BASH: (load needed raw and subject in GUI) save fiducials and save trans.fif
+"""
+mne coreg --subject sub-02 --subjects-dir /Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects --fif /Users/maryamvalian/Data/ds005810/sub-02/ses-ImageNet02/meg/sub-02_ses-ImageNet02_task-ImageNet_run-01_meg.fif 
+"""
+
+# %% [markdown]
+# # COREG Code (only fiducials with gui)
+
+# %%
+#BASH : mne coreg , set fiducials, save MRI Fid. then Fit fiducials,Fit ICP and save as trans!
+
 from mne.io import read_fiducials
-fid_path = Path("/Users/maryamvalian/Data/ds005810/derivatives/mne/sub-01/sub-01-fiducials.fif")
+fid_path = Path(f"/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects/{subject}/bem/{subject}-fiducials.fif")
 fids_list, coord_frame = read_fiducials(str(fid_path))
 fids_list
 
-# %%
-coord_frame
 
-# %%
-raw_fif=root/f"{subject}/ses-ImageNet01/meg/{subject}_ses-ImageNet01_task-ImageNet_run-01_meg.fif"
-info = mne.io.read_info(raw_fif)
+raw_fif=f"/Users/maryamvalian/Data/ds005810/{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-01_meg.fif"
+info = mne.io.read_info(raw_fif)         #=====> connect meg coord to mri coord :trans.fif
 
 coreg = Coregistration(
     subject=subject,
@@ -199,7 +215,7 @@ coreg = Coregistration(
     fiducials=fids_list,
 )
 
-coreg.set_scale_mode("uniform")                #"uniform"
+coreg.set_scale_mode("None")                #"uniform"
 
 
 coreg.fit_fiducials()
@@ -210,6 +226,7 @@ coreg.fit_icp(n_iterations=50)
 out_trans = f"{root}/derivatives/trans/{subject}-trans.fif"
 mne.write_trans(out_trans, coreg.trans, overwrite=True)
 
+
 # %%
 coreg.trans
 
@@ -217,18 +234,30 @@ coreg.trans
 coreg.scale
 
 # %%
+#scale to fsaverage
+"""
 scale=coreg.scale
-mne.scale_mri('fsaverage', subject, scale, subjects_dir=SUBJECTS_DIR, labels=False)
+mne.scale_mri('fsaverage', subject, scale, subjects_dir=subjects_dir, labels=False)
+"""
 
 # %% [markdown]
-# ### 4. create src
+# ### 4. create src FORCE INNER SKULL
 
 # %%
-mne_out = Path("/Users/maryamvalian/Data/ds005810/derivatives/mne")
-src = mne.setup_volume_source_space(subject=subject, 
-                                     subjects_dir=subjects_dir,
-                                     pos=7.0, mri="aseg.mgz")
-mne.write_source_spaces(mne_out/subject/f"{subject}-vol7-src.fif", src, overwrite=True)
+#Drop sources outside of Inner_skull.surf otherwise not consistent with source in fwd later we will make)
+for i in range(2, 11):
+    
+    subject = f"sub-{i:02d}"
+
+    surf_path = f"{subjects_dir}/{subject}/bem/inner_skull.surf"
+    
+    src = mne.setup_volume_source_space(subject, subjects_dir=subjects_dir,
+                                    pos=7.0, mri="aparc+aseg.mgz",surface=surf_path,verbose=False)
+    
+    
+    mne.write_source_spaces(f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif", src, overwrite=True,verbose=False)
+    print(f"Source created for {subject}: {src}")
+
 
 # %% [markdown]
 # ### 5. Biuld FWD
@@ -265,11 +294,27 @@ src_sb01 = mne.read_source_spaces(
 src_sb01
 
 # %%
-src_2 = mne.read_source_spaces(
-    f"{root}/derivatives/freesurfer/sub-01_old/bem/sub-01-vol-7-src.fif" #befor scale_subject
+src = mne.read_source_spaces(
+    f"{SUBJECTS_DIR}/sub-02/bem/sub-02-vol-7-src.fif"
 )
+src
 
 # %%
-src_2
+src = mne.read_source_spaces(
+    f"{SUBJECTS_DIR}/sub-03/bem/sub-03-vol-7-src.fif"
+)
+src
+
+# %%
+src = mne.read_source_spaces(
+    f"{SUBJECTS_DIR}/fsaverage/bem/fsaverage-vol-7-src.fif"
+)
+src
+
+# %%
+src = mne.read_source_spaces(
+    f"{SUBJECTS_DIR}/fsaverage2/bem/fsaverage-vol-7-src.fif"
+)
+src
 
 # %%
