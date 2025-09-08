@@ -24,18 +24,18 @@ from eelbrain import plot, combine
 from eelbrain import *
 
 # %%
-subject="sub-03"
+subject="sub-02"
 run="01"
-session="ImageNet02"
+session="ImageNet02"                          
 root = Path("~/Data/ds005810")
+subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
+
 
 clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_meg_clean.fif"
 raw_fif=root/f"{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-{run}_meg.fif"
 empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-noise_meg.fif"
 
-
-
-subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
+src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
 
 # %%
 raw = mne.io.read_raw_fif(raw_fif, preload=True,verbose=False)
@@ -132,7 +132,7 @@ noise_cov
 # # Lead FIeld
 
 # %%
-src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
+
 src = mne.read_source_spaces(str(src_file),verbose=False)
 src
 
@@ -144,7 +144,7 @@ bem_sol_fif=f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
 bem_sol = mne.read_bem_solution(bem_sol_fif)
 print(f"BEM SOLUTION: {bem_sol}")
 
-trans_fif= f"{root}/derivatives/trans/{subject}-trans.fif"
+trans_fif= f"{root}/derivatives/trans/{subject}-{session}-trans.fif"
 trans=mne.read_trans(trans_fif)
 
 fwd = mne.make_forward_solution(meg.info,trans ,
@@ -154,13 +154,12 @@ fwd = mne.make_forward_solution(meg.info,trans ,
                                 verbose=False
                                )
 
-meg_ndvar = load.fiff.raw_ndvar(meg)
-print(f"MEG: {meg_ndvar}")
+#Print(f"FWD src={len(fwd['src'][0]['vertno'])}")
 
 #convert fwd to ndvar
 lf = load.mne.forward_operator(fwd,src='vol-7',
                                subjects_dir=subjects_dir,
-                               connectivity=False,parc='aparc+aseg') 
+                               adjacency=False,parc='aparc+aseg') 
 lf  = lf.sub(sensor=meg_ndvar.sensor)
 lf
 
@@ -195,8 +194,8 @@ hlist
 
 # %%
 h = hlist[0]
-                      
 
+# %%
 h= morph_source_space(
     h,
     subject_to='fsaverage',
@@ -205,7 +204,7 @@ h= morph_source_space(
     )
 
 
-
+# %%
 h = h.smooth('source', 0.01, 'gaussian')
 p = plot.Butterfly(h.norm('space'), color='k')
 times = [0.12,0.17,0.24,0.37,0.48,0.55,0.66,0.77]
@@ -220,7 +219,7 @@ for t in times:
 # %%
 clean.filter(1., 40., phase="zero-double", verbose=False)
 clean.resample(100, npad="auto", verbose=False)
-clean_ndvar = load.fiff.raw_ndvar(meg)
+clean_ndvar = load.fiff.raw_ndvar(clean)
 clean_ndvar
 
 # %%
@@ -265,18 +264,18 @@ stc_nd
 # %%
 morphed_stc = morph_source_space(                   
     stc_nd,
-    subject_to='fsaverage2',
+    subject_to='fsaverage',
     copy=True,
     
     )
 
 # %%
-p = plot.Butterfly(morphed_stc.norm('space'), color='k')
-times = [0.12,0.17,0.24,0.37,0.48,0.55,0.66,0.77]
+p = plot.Butterfly(stc_nd.norm('space'), color='k')
+times = [0.12,0.17,0.24,0.37,0.48,0.55]
 for t in times:
     p.add_vline(t)
 for t in times:
-    f = plot.GlassBrain(morphed_stc.sub(time=t),title=f"stim_on morphed, {t}s") 
+    f = plot.GlassBrain(stc_nd.sub(time=t),title=f"stim_on morphed, {t}s") 
 
 # %%
 clean=clean.pick("meg")
@@ -315,7 +314,7 @@ mindist=0 #same src size for all subjects
 bem_model = mne.make_bem_model(subject, ico=4, conductivity=(0.3,),verbose=False)
 bem_sol   = mne.make_bem_solution(bem_model,verbose=False)
 
-trans_fif= f"{root}/derivatives/trans/{subject}-trans.fif"
+trans_fif= f"{root}/derivatives/trans/{subject}-{session}-trans.fif"
 trans=mne.read_trans(trans_fif)
 
 fwd = mne.make_forward_solution(clean.info,trans ,
@@ -331,7 +330,7 @@ print(fwd)
 #convert mne fwd to ndvar
 lf = load.mne.forward_operator(fwd,src='vol-7',
                                subjects_dir=subjects_dir,
-                               connectivity=False,parc='aparc+aseg') 
+                               adjacency=False,parc='aparc+aseg') 
 lf  = lf.sub(sensor=clean_ndvar.sensor)
 lf
 
