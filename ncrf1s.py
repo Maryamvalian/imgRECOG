@@ -24,11 +24,13 @@ from eelbrain import plot, combine
 from eelbrain import *
 
 # %%
-subject="sub-01"
+subject="sub-03"
+run="01"
+session="ImageNet02"
 root = Path("~/Data/ds005810")
 
-clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-ImageNet01_task-ImageNet_run-01_meg_clean.fif"
-raw_fif=root/f"{subject}/ses-ImageNet01/meg/{subject}_ses-ImageNet01_task-ImageNet_run-01_meg.fif"
+clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_meg_clean.fif"
+raw_fif=root/f"{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-{run}_meg.fif"
 empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-noise_meg.fif"
 
 
@@ -42,6 +44,7 @@ events = find_events(raw, stim_channel="UPPT001")
 #raw.info["bads"]  
 clean
 #raw.n_times
+fig = mne.viz.plot_events(events, sfreq=raw.info["sfreq"], first_samp=raw.first_samp)
 
 # %%
 stim = events[events[:, 2] == 2]   #ID2 : stim_on
@@ -53,19 +56,22 @@ len(stim)
 
 # %%
 meta = pd.read_csv(f"/Users/maryamvalian/Data/ds005810/derivatives/detailed_events/{subject}_events.csv")
-meta_r1 = meta[(meta['session'] == 'ImageNet01') & (meta['run'] == 1)].reset_index(drop=True)
+meta_sub = meta[(meta['session'] == session) & (meta['run'] ==int(run))].reset_index(drop=True)
+meta_sub
 
 # %%
-n=len(meta_r1)
+n=len(meta_sub)
 n
 
 # %%
-anim_flags = meta_r1.loc[:n-1, 'stim_is_animate'].to_numpy().astype(bool)
+anim_flags = meta_sub['stim_is_animate'].astype(str).str.lower().eq("true").to_numpy()
+anim_flags
 
 # %%
 event_table = pd.DataFrame({
            
     "time": stim_times, 
+    
     "animate": anim_flags           
 })
 
@@ -132,8 +138,11 @@ src
 
 # %%
 mindist=0 #same src size for all subjects
-bem_model = mne.make_bem_model(subject, ico=4, conductivity=(0.3,),verbose=False)
-bem_sol   = mne.make_bem_solution(bem_model,verbose=False)
+#bem_model = mne.make_bem_model(subject, ico=4, conductivity=(0.3,),verbose=False)
+#bem_sol   = mne.make_bem_solution(bem_model,verbose=False)
+bem_sol_fif=f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
+bem_sol = mne.read_bem_solution(bem_sol_fif)
+print(f"BEM SOLUTION: {bem_sol}")
 
 trans_fif= f"{root}/derivatives/trans/{subject}-trans.fif"
 trans=mne.read_trans(trans_fif)
@@ -144,12 +153,11 @@ fwd = mne.make_forward_solution(meg.info,trans ,
                                 mindist=mindist,
                                 verbose=False
                                )
-print(fwd)
 
 meg_ndvar = load.fiff.raw_ndvar(meg)
 print(f"MEG: {meg_ndvar}")
 
-#convert mne fwd to ndvar
+#convert fwd to ndvar
 lf = load.mne.forward_operator(fwd,src='vol-7',
                                subjects_dir=subjects_dir,
                                connectivity=False,parc='aparc+aseg') 
@@ -248,7 +256,7 @@ stc_vec = mne.minimum_norm.apply_inverse(
 stc_nd = load.mne.stc_ndvar(
     stc_vec,
     src='vol-7',                         
-    subjects_dir=SUBJECTS_DIR,
+    subjects_dir=subjects_dir,
     subject=subject,
 )
 
@@ -257,7 +265,7 @@ stc_nd
 # %%
 morphed_stc = morph_source_space(                   
     stc_nd,
-    subject_to='fsaverage',
+    subject_to='fsaverage2',
     copy=True,
     
     )
@@ -376,3 +384,13 @@ for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(h.sub(time=t),title=f"ALL words, {t}s")  
+
+# %%
+
+# %%
+
+# %%
+
+# %%
+
+# %%
