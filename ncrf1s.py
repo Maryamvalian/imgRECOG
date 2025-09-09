@@ -23,6 +23,9 @@ from eelbrain import NDVar, UTS
 from eelbrain import plot, combine
 from eelbrain import *
 
+from eelbrain import NDVar
+from eelbrain._data_obj import VolumeSourceSpace
+
 # %%
 subject="sub-02"
 run="01"
@@ -186,25 +189,61 @@ hlist=model.h
 hlist
 
 # %%
-h = hlist[0]
+hlist=model.h
+inanim=hlist[0]
+anim=hlist[1]
 
 # %%
-h= morph_source_space(
-    h,
+"""
+anim= morph_source_space(
+    anim,
     subject_to='fsaverage2',
     copy=True,
     
+    
     )
-
+"""    
 
 # %%
-h = h.smooth('source', 0.01, 'gaussian')
-p = plot.Butterfly(h.norm('space'), color='k')
+src_sub  = mne.read_source_spaces(f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif")
+src_fs2  = mne.read_source_spaces(f"{subjects_dir}/fsaverage2/bem/fsaverage2-vol-7-src.fif")
+
+# Morph Matrix
+morph = mne.compute_source_morph(
+    src=src_sub, subject_from=subject, subject_to='fsaverage2',
+    subjects_dir=subjects_dir, src_to=src_fs2, precompute=True, verbose=False
+)
+M = morph.vol_morph_mat  
+
+# morph anim to fsaverage2
+Y = anim.get_data()  
+
+if Y.ndim == 1 or  Y.ndim == 2:                
+    Y_fs = M @ Y
+elif Y.ndim == 3:                #vector model
+    
+    if Y.shape[1] == 3 and Y.shape[2] > Y.shape[1]:  # (4045, 3, 81)
+        Y_fs = np.stack([M @ Y[:, k, :] for k in range(3)], axis=1)
+    # Or if shape is (source, time, vector) 
+    elif Y.shape[2] == 3 and Y.shape[1] > Y.shape[2]:  # (source, time, 3)
+        Y_fs = np.stack([M @ Y[:, :, k] for k in range(3)], axis=2)
+    else:
+        raise ValueError(f"Unexpected shape: {Y.shape}")
+else:
+    raise ValueError("Unexpected NDVar shape")
+
+# build fsaverage2 volume SourceSpace dim and new NDVar
+source_fs = VolumeSourceSpace.from_file(SUBJECTS_DIR, 'fsaverage2', 'vol-7', parc=None)
+anim_fs = NDVar(Y_fs, (source_fs,) + anim.dims[1:], name='anim_fsavg2')
+
+# %%
+anim_fs = anim_fs.smooth('source', 0.01, 'gaussian')
+p = plot.Butterfly(anim_fs.norm('space'), color='k')
 times = [0.12,0.17,0.24,0.37,0.48,0.55,0.66,0.77]
 for t in times:
     p.add_vline(t)
 for t in times:
-    f = plot.GlassBrain(h.sub(time=t),title=f"ALL words, {t}s")  
+    f = plot.GlassBrain(anim_fs.sub(time=t),title=f"Inanimate {subject}, {t}s")  
 
 # %% [markdown]
 # ## MNE inverse
@@ -283,6 +322,6 @@ times = [0.12,0.17,0.24,0.37,0.48,0.55]
 for t in times:
     p.add_vline(t)
 for t in times:
-    f = plot.GlassBrain(stc_nd_fs.sub(time=t),title=f"stim_on morphed, {t}s") 
+    f = plot.GlassBrain(stc_nd_fs.sub(time=t),title=f"{subject}, {t}s") 
 
 # %%
