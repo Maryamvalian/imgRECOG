@@ -307,3 +307,110 @@ for t in times:
     f = plot.GlassBrain(stc_nd_fs.sub(time=t),title=f"{subject}, {t}s") 
 
 # %%
+raw = mne.io.read_raw_fif(raw_fif, preload=True, verbose=False)
+events = mne.find_events(raw, stim_channel='UPPT001')
+raw.filter(1., 40., phase='zero-double', verbose=False)
+
+rs_raw, rs_events = raw.resample(
+    100, npad='auto', events=events, stim_picks='UPPT001', verbose=False
+)
+epochs = mne.Epochs(
+    rs_raw, rs_events, event_id={'stim_on': 2}, tmin=-0.1, tmax=0.8, verbose=False
+)
+
+
+
+anim_flags = meta_sub['stim_is_animate'].astype(str).str.lower().eq('true').to_numpy()
+idx_anim = anim_flags
+idx_inanim = ~anim_flags
+
+
+evoked_anim   = epochs[idx_anim].average()
+evoked_inanim = epochs[idx_inanim].average()
+
+"""
+inv = mne.minimum_norm.make_inverse_operator(
+    info=rs_raw.info,
+    forward=fwd,
+    noise_cov=noise_cov,
+    loose=1.0,     # free orientation
+    depth=0.8,
+    fixed=False,
+    verbose=False,
+)
+
+snr = 3.0
+lambda2 = 1.0 / snr**2
+"""
+
+
+stc_anim_vec = mne.minimum_norm.apply_inverse(
+    evoked_anim, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False
+)
+stc_inan_vec = mne.minimum_norm.apply_inverse(
+    evoked_inanim, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False
+)
+
+
+# %%
+morph = mne.compute_source_morph(
+    src=src,
+    subject_from=subject,
+    subject_to="fsaverage2",     
+    subjects_dir=subjects_dir,
+    spacing=7.0, 
+    src_to=src_fs2,                                     #========force to use destination src size
+    precompute=True,
+    verbose=True,
+)
+stc_anim_vec_fs = morph.apply(stc_anim_vec)
+
+# %%
+stc_anim_vec_fs_nd = load.mne.stc_ndvar(
+    stc_anim_vec_fs,
+    src='vol-7',                  
+    subjects_dir=subjects_dir,
+    subject='fsaverage2',
+)
+stc_anim_vec_fs_nd
+
+p = plot.Butterfly(stc_anim_vec_fs_nd.norm('space'), color='k')
+times = [0.12,0.17,0.24,0.37,0.48,0.55]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(stc_anim_vec_fs_nd.sub(time=t),title=f"MNE Animate-{subject}, {t}s") 
+
+# %%
+morph = mne.compute_source_morph(
+    src=src,
+    subject_from=subject,
+    subject_to="fsaverage2",     
+    subjects_dir=subjects_dir,
+    spacing=7.0, 
+    src_to=src_fs2,                                    
+    precompute=True,
+    verbose=True,
+)
+stc_inan_vec_fs = morph.apply(stc_inan_vec)
+
+
+stc_inan_vec_fs_nd = load.mne.stc_ndvar(
+    stc_inan_vec_fs,
+    src='vol-7',                  
+    subjects_dir=subjects_dir,
+    subject='fsaverage2',
+)
+stc_inan_vec_fs_nd
+
+
+
+# %%
+p = plot.Butterfly(stc_inan_vec_fs_nd.norm('space'), color='k')
+times = [0.12,0.17,0.24,0.37,0.48,0.55]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(stc_inan_vec_fs_nd.sub(time=t),title=f"MNE Innimate-{subject}, {t}s") 
+
+# %%
