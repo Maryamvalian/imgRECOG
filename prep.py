@@ -201,23 +201,16 @@ mne coreg --subject sub-02 --subjects-dir /Users/maryamvalian/Data/ds005810/deri
 # # COREG Code (only fiducials with gui) then run this code
 
 # %%
-
-
-raw_fif=f"/Users/maryamvalian/Data/ds005810/{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-04_meg.fif"
-raw = mne.io.read_raw_fif(raw_fif, preload=False)
-
-
-# %%
-session="ImageNet01"
+session="ImageNet03"
 root = Path("~/Data/ds005810")
 subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
 
 
-for i in range(13,14 ):
+for i in range(6,7 ):
     
     subject = f"sub-{i:02d}"
 
-    raw_fif=f"/Users/maryamvalian/Data/ds005810/{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-04_meg.fif"
+    raw_fif=f"/Users/maryamvalian/Data/ds005810/{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-08_meg.fif"
     info = mne.io.read_info(raw_fif) 
     
     coreg = mne.coreg.Coregistration( subject=subject,info=info, subjects_dir=subjects_dir)
