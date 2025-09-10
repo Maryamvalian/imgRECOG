@@ -108,25 +108,6 @@ mne.datasets.fetch_fsaverage(subjects_dir=str(subjects_dir))
 """
 
 # %% [markdown]
-# # to create fsaverage-vol-7-src.fif in the fsaverage/bem : 
-
-# %%
-#to create fsaverage-vol-7-src.fif in the fsaverage/bem :  ========Not forcing innerskull :not correct
-"""
-src_vol = mne.setup_volume_source_space(
-    subject="fsaverage",
-    subjects_dir=str(subjects_dir),
-    pos=7.0,            
-    mri="aparc+aseg.mgz",
-    verbose=False,
-)
-mne.write_source_spaces(
-    f"{subjects_dir}/fsaverage/bem/fsaverage-vol-7-src.fif",
-    src_vol, overwrite=True
-)
-"""
-
-# %% [markdown]
 # # AFTER RECON-all by freesurfer
 
 # %% [markdown]
@@ -254,12 +235,6 @@ mne.write_trans(out_trans, coreg.trans, overwrite=True)
 """
 
 # %%
-coreg.trans
-
-# %%
-coreg.scale
-
-# %%
 #scale to fsaverage
 """
 scale=coreg.scale
@@ -271,7 +246,7 @@ mne.scale_mri('fsaverage', subject, scale, subjects_dir=subjects_dir, labels=Fal
 
 # %%
 #Drop sources outside of Inner_skull.surf otherwise not consistent with source in fwd later we will make)
-for i in range(2, 11):
+for i in range(11, 31):
     
     subject = f"sub-{i:02d}"
 
@@ -307,41 +282,6 @@ fwd = mne.make_forward_solution(
     meg=True, eeg=False, mindist=0.0
 )
 mne.write_forward_solution(mne_out/subject/f"{subject}-fwd.fif", fwd, overwrite=True)
-
-# %% [markdown]
-# ## after scale subject ( renamed old folder to sun-01_old)
-
-# %%
-src_sb01 = mne.read_source_spaces(
-    f"{SUBJECTS_DIR}/sub-01/bem/sub-01-vol-7-src.fif"
-)
-
-# %%
-src_sb01
-
-# %%
-src = mne.read_source_spaces(
-    f"{SUBJECTS_DIR}/sub-02/bem/sub-02-vol-7-src.fif"
-)
-src
-
-# %%
-src = mne.read_source_spaces(
-    f"{SUBJECTS_DIR}/sub-03/bem/sub-03-vol-7-src.fif"
-)
-src
-
-# %%
-src = mne.read_source_spaces(
-    f"{SUBJECTS_DIR}/fsaverage/bem/fsaverage-vol-7-src.fif"
-)
-src
-
-# %%
-src = mne.read_source_spaces(
-    f"{SUBJECTS_DIR}/fsaverage2/bem/fsaverage-vol-7-src.fif"
-)
-src
 
 # %% [markdown]
 # # WRITE SRC FSAVERAGE 
