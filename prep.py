@@ -94,21 +94,24 @@ len(m01r1)
 m01r1[['stim_is_animate','resp_is_right']].mean(numeric_only=True)  
 
 # %%
+#Download FsAVERAGE by MNE
+"""
 root = Path("~/Data/ds005810").expanduser()
 subjects_dir = root / "derivatives" / "freesurfer" / "subjects"
 subjects_dir.mkdir(parents=True, exist_ok=True)
 
-# Make sure libraries see it
+
 os.environ["SUBJECTS_DIR"] = str(subjects_dir)
 
-# 1) Get fsaverage (MNE will download the official template if missing)
+
 mne.datasets.fetch_fsaverage(subjects_dir=str(subjects_dir))
+"""
 
 # %% [markdown]
 # # to create fsaverage-vol-7-src.fif in the fsaverage/bem : 
 
 # %%
-#to create fsaverage-vol-7-src.fif in the fsaverage/bem : 
+#to create fsaverage-vol-7-src.fif in the fsaverage/bem :  ========Not forcing innerskull :not correct
 """
 src_vol = mne.setup_volume_source_space(
     subject="fsaverage",
@@ -171,7 +174,7 @@ for i in range(1, 2):
     
     out_bem = f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
     mne.write_bem_solution(out_bem, bem, overwrite=True,verbose=False)
-    print("bem-sol.fif saved successfully.")
+    print(f"{subject}-bem-sol.fif saved successfully.")
 
 
 # %% [markdown]
@@ -192,13 +195,43 @@ subjects_dir
 """
 mne coreg --subject sub-02 --subjects-dir /Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects --fif /Users/maryamvalian/Data/ds005810/sub-02/ses-ImageNet02/meg/sub-02_ses-ImageNet02_task-ImageNet_run-01_meg.fif 
 """
+#BASH mne coreg : setting fiducials dosent need meg info
 
 # %% [markdown]
-# # COREG Code (only fiducials with gui)
+# # COREG Code (only fiducials with gui) then run this code
+
+# %%
+
+
+raw_fif=f"/Users/maryamvalian/Data/ds005810/{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-04_meg.fif"
+raw = mne.io.read_raw_fif(raw_fif, preload=False)
+
+
+# %%
+session="ImageNet01"
+root = Path("~/Data/ds005810")
+subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
+
+
+for i in range(13,14 ):
+    
+    subject = f"sub-{i:02d}"
+
+    raw_fif=f"/Users/maryamvalian/Data/ds005810/{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-04_meg.fif"
+    info = mne.io.read_info(raw_fif) 
+    
+    coreg = mne.coreg.Coregistration( subject=subject,info=info, subjects_dir=subjects_dir)
+    coreg.fit_fiducials()
+    coreg.fit_icp(n_iterations=50)
+    
+    out_trans = f"{root}/derivatives/trans/{subject}-{session}-trans.fif"
+    mne.write_trans(out_trans, coreg.trans, overwrite=True)
+
+    print(f"{subject}-{session}-trans.fif saved successfully." )
 
 # %%
 #BASH : mne coreg , set fiducials, save MRI Fid. then Fit fiducials,Fit ICP and save as trans!
-
+"""
 from mne.io import read_fiducials
 fid_path = Path(f"/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects/{subject}/bem/{subject}-fiducials.fif")
 fids_list, coord_frame = read_fiducials(str(fid_path))
@@ -215,7 +248,7 @@ coreg = Coregistration(
     fiducials=fids_list,
 )
 
-coreg.set_scale_mode("None")                #"uniform"
+coreg.set_scale_mode("None")                
 
 
 coreg.fit_fiducials()
@@ -223,9 +256,9 @@ coreg.fit_fiducials()
 coreg.fit_icp(n_iterations=50)
 
 
-out_trans = f"{root}/derivatives/trans/{subject}-trans.fif"
+out_trans = f"{root}/derivatives/trans/{subject}-{session}-trans.fif"
 mne.write_trans(out_trans, coreg.trans, overwrite=True)
-
+"""
 
 # %%
 coreg.trans
@@ -316,5 +349,31 @@ src = mne.read_source_spaces(
     f"{SUBJECTS_DIR}/fsaverage2/bem/fsaverage-vol-7-src.fif"
 )
 src
+
+# %% [markdown]
+# # WRITE SRC FSAVERAGE 
+# ## force inside inner_skull
+#
+
+# %%
+"""
+subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
+surf = Path(subjects_dir) / "fsaverage2" / "bem" / "inner_skull.surf"
+
+src_fs = mne.setup_volume_source_space(
+    subject="fsaverage2",
+    subjects_dir=subjects_dir,
+    pos=7.0,
+    mri="aseg.mgz",
+    surface=str(surf),          # constrain to inner skull
+)
+mne.write_source_spaces(f"{subjects_dir}/fsaverage2/bem/fsaverage-vol-7-src.fif",
+                        src_fs, overwrite=True)
+
+#___________________
+#befor force: n_used=8925
+#after: n_used=5222
+
+"""
 
 # %%
