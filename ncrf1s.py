@@ -29,7 +29,7 @@ from eelbrain._data_obj import VolumeSourceSpace
 from morph_nd import morph_nd
 
 # %%
-subject="sub-02"
+subject="sub-08"
 run="01"
 session="ImageNet02" 
 
@@ -42,7 +42,7 @@ empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-
 
 # %%
 raw = mne.io.read_raw_fif(raw_fif, preload=True,verbose=False)
-clean= mne.io.read_raw_fif(clean_fif, preload=True,verbose=False)
+#clean= mne.io.read_raw_fif(clean_fif, preload=True,verbose=False)
 events = find_events(raw, stim_channel="UPPT001")
 #raw.info["bads"]  
 #raw.n_times
@@ -189,6 +189,10 @@ save.pickle(model, filename)
 
 hlist=model.h
 hlist
+
+# %%
+from IPython.display import Audio
+Audio(np.sin(2*np.pi*440*np.linspace(0,1,44100)), rate=44100, autoplay=True)
 
 # %%
 """
@@ -412,5 +416,9 @@ for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(stc_inan_vec_fs_nd.sub(time=t),title=f"MNE Innimate-{subject}, {t}s") 
+
+# %%
+from IPython.display import Audio
+Audio(np.sin(2*np.pi*440*np.linspace(0,1,44100)), rate=44100, autoplay=True)
 
 # %%
