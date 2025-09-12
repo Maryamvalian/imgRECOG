@@ -22,7 +22,9 @@ subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expan
 
 # %%
 cases = []
-for i in range(1, 9):
+for i in range(1, 31):
+    if i == 28:            #corrupted MEGs in all runs
+        continue
     subject = f"sub-{i:02d}"
     morphed_file = f"base_ncrf/{subject}-morphed.pickle"
     
@@ -30,6 +32,7 @@ for i in range(1, 9):
         print(f"Morphed {subject} loaded from file.")
         inanim, anim = load.unpickle(morphed_file)
     else:
+                  
         print(f"Computing morphed for {subject}...")
         model_file = f"base_ncrf/{subject}.pickle"
         model = load.unpickle(model_file)
@@ -48,27 +51,27 @@ for i in range(1, 9):
     cases.append([subject, 'inanimate', inanim])
     cases.append([subject, 'animate', anim])
     
-data = Dataset.from_caselist(['subject', 'type', 'ncrf'], cases)
+data = Dataset.from_caselist(['subject', 'animacy', 'ncrf'], cases)
 data.head()
 
 # %%
 res = testnd.VectorDifferenceRelated(
     'ncrf',             
-    'type',           
+    'animacy',           
     'inanimate',     
     'animate',   
     match='subject',     
     data=data,     
     tfce=True,           
     tstart=0.1,
-    tstop=0.6,
+    tstop=0.7,
     samples=1000
 )
 
 # %%
 diff= res.masked_difference()
 p = plot.Butterfly(diff.norm('space'), color='k',title='anim VS inanim')
-times = [0.21]
+times = [0.11,0.22,0.35,0.5,0.6]
 for t in times:
     p.add_vline(t)
 for t in times:
@@ -78,24 +81,37 @@ for t in times:
 # ## one sample test
 
 # %%
-data_inan = data.sub("type == 'inanimate'")
+data_inan = data.sub("animacy == 'inanimate'")
 result_inan = testnd.Vector('ncrf', match='subject', data=data_inan, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
 
 # %%
 p = plot.Butterfly(result_inan.masked_difference().norm('space'), color='k')
-times = [0.12]
+times = [0.13,0.22,0.28,0.4]
 for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(result_inan.masked_difference().sub(time=t),title=f"Inanimate, {t}s")  
 
+# %%
+data_an = data.sub("animacy == 'animate'")
+result_an = testnd.Vector('ncrf', match='subject', data=data_an, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
+result_an
+
+# %%
+p = plot.Butterfly(result_an.masked_difference().norm('space'), color='k')
+times = [0.13,0.22,0.27,0.37,0.4]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(result_an.masked_difference().sub(time=t),title=f"animate, {t}s")  
+
 # %% [markdown]
 # ## aggregate
 
 # %%
-agg=data.aggregate('type', drop_bad=True)
-agg_in = agg.sub("type == 'inanimate'")
-agg_an = agg.sub("type == 'animate'")
+agg=data.aggregate('animacy', drop_bad=True)
+agg_in = agg.sub("animacy == 'inanimate'")
+agg_an = agg.sub("animacy == 'animate'")
 diff=agg_an['ncrf']- agg_in['ncrf']
 p = plot.Butterfly(diff.norm('space'), color='k')
 times = [0.12,0.17,0.28,0.45]
@@ -131,6 +147,10 @@ times = [0.12,0.17,0.28,0.45,0.56,0.65,0.72]
 for t in times:
     p.add_vline(t)
 for t in times:
-    f = plot.GlassBrain(stc_diff.sub(time=t),title=f"one subject animate, {t}s") 
+    f = plot.GlassBrain(stc_diff.sub(time=t),title=f"diff ainm-inan one subject, {t}s") 
+
+# %%
+
+# %%
 
 # %%
