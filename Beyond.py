@@ -55,3 +55,14 @@ def GlassBrainVideo(tmin, tmax, dt, nd, vname):
     frames = [imageio.imread(p) for p in stitched_paths]
     imageio.mimsave(video_path, frames, fps=fps, quality=8)
     print(f"Saved video to: {video_path}")
+
+
+    #-------------
+    """
+    from Beyond import GlassBrainVideo
+    GlassBrainVideo(0.1, 0.8, 0.1, anim, "v4")
+
+    from IPython.display import Video
+    video_path="videos/v4.mp4"
+    Video(video_path, embed=True, width=1200)
+    """
