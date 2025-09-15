@@ -28,102 +28,122 @@ from eelbrain._data_obj import VolumeSourceSpace
 import os
 from morph_nd import morph_nd
 
+# %% [markdown]
+# # Create STC ans save model
+
 # %%
-run="01"
-session="ImageNet01"            #1-9 :Net02, 10-31:Net01 run4
-
 root = Path("~/Data/ds005810")
-subjects_dir = str(Path('raw = mne.io.read_raw_fif(raw_fif, preload=True, verbose=False)/derivatives/freesurfer/subjects').expanduser())
-
-
-
+subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
 empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-noise_meg.fif"
 
-# %%
-run="04"
-session="ImageNet01" 
-for i in range(1, 31):
-    if (i == 28) or (i==11):            #corrupted MEGs in all runs
-        continue
-    subject = f"sub-{i:02d}"
-    modelfile = f"clean_models/{subject}.pickle"
-    raw_fif=root/f"{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-{run}_meg.fif"
-    clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_meg_clean.fif"
 
+#Noise
+raw_er = mne.io.read_raw_fif(empty_room, preload=True, verbose=False).pick('meg')
+raw_er.filter(1., 40., phase="zero-double", verbose=False)
+raw_er.resample(100, npad="auto", verbose=False)
+noise_cov = mne.compute_raw_covariance(raw_er, method='shrunk', rank=None,verbose=False)
+
+
+# %%
+root_epochs = Path("/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/epochs")
+fwd_dir=Path("/Users/maryamvalian/Data/ds005810/derivatives/eelbrain/cache/raw")
+fwd_dir.mkdir(parents=True, exist_ok=True)
+
+for i in range(10, 31):
+    if (i<10):
+        run="01"
+        session="ImageNet02" 
+    elif (i==11) or (i==30): 
+        run="01" 
+        session="ImageNet01" 
+    elif i==28:
+        continue
+    elif (i==22): 
+        run="04" 
+        session="ImageNet01"     
+    else:
+        run="05" 
+        session="ImageNet01" 
     
+    subject = f"sub-{i:02d}"
+    
+    epo_file = root_epochs / f"{subject}_meg_epo.fif"
+    clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_clean_meg.fif"
+    fwd_file=fwd_dir / f"{subject}_{session}/{subject}-fwd.fif"
+    fwd_file.parent.mkdir(parents=True, exist_ok=True)
+    modelfile = f"models/{subject}-mne.pickle"
+
     if os.path.exists(modelfile):
         print(f"{subject} loaded from file.")
         continue
     try:
-        print(f"Start {subject}...")
-        raw = mne.io.read_raw_fif(raw_fif, preload=True, verbose=False)
-        events = mne.find_events(raw, stim_channel='UPPT001')
         
-        stim = events[events[:, 2] == 2]   #ID2 : stim_on
-        stim_samples = stim[:, 0]
+
+        if not epo_file.exists():
+            print(f" Skipping {subject}: no epo file at {epo_file}")
+            continue
+    
+        print(f"Loading {epo_file} ...")
+        epochs = mne.read_epochs(str(epo_file), preload=True, verbose=False)
+        clean = mne.io.read_raw_fif(clean_fif, preload=True, verbose=False)
+    
         
-        stim_times = stim_samples / raw.info["sfreq"]
-        meta = pd.read_csv(f"/Users/maryamvalian/Data/ds005810/derivatives/detailed_events/{subject}_events.csv")
-        meta_sub = meta[(meta['session'] == session) & (meta['run'] ==int(run))].reset_index(drop=True)
-        n=len(meta_sub)
-        anim_flags = meta_sub['stim_is_animate'].astype(str).str.lower().eq("true").to_numpy()
-        event_table = pd.DataFrame({  "time": stim_times,  "animate": anim_flags })
-        #print(event_table)
-        
-        raw_er = mne.io.read_raw_fif(empty_room, preload=True, verbose=False).pick('meg')
-        raw_er.filter(1., 40., phase="zero-double", verbose=False)
-        raw_er.resample(100, npad="auto", verbose=False)
-        noise_cov = mne.compute_raw_covariance(raw_er, method='shrunk', rank=None,verbose=False)
-        
-        
+        epochs_resamp = epochs.copy().resample(100, npad="auto", verbose=False)
+        meta = epochs_resamp.metadata
+    
+            
+        mask_in = (
+            (meta["subject"] == i) &
+            (meta["session"] == session) &
+            (meta["run"] == int(run))&
+            (meta["stim_is_animate"] ==False)
+        )
+    
+        epochs_in = epochs_resamp[mask_in]
+        print(len(epochs_in))
+    
+    
+        mask_an = (
+            (meta["subject"] == i) &
+            (meta["session"] == session) &
+            (meta["run"] == int(run))&
+            (meta["stim_is_animate"] ==True)
+        )
+    
+        epochs_an = epochs_resamp[mask_an]
+        print(len(epochs_an))
+
+        evoked_anim   = epochs_an.average()
+        evoked_inanim = epochs_in.average()
+    
+    
         src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
         src = mne.read_source_spaces(str(src_file),verbose=False)
-        
+    
         bem_sol_fif=f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
         bem_sol = mne.read_bem_solution(bem_sol_fif,verbose=False)
         
-        
         trans_fif= f"{root}/derivatives/trans/{subject}-{session}-trans.fif"
         trans=mne.read_trans(trans_fif)
-        
-        meg=raw.pick("meg")
-        meg.filter(1., 40., phase="zero-double", verbose=False)
-        meg.resample(100, npad="auto", verbose=False)
-        
-        print("   Computing FWD...")
-        fwd = mne.make_forward_solution(meg.info,trans ,
-                                        src, bem_sol,
-                                        meg=True, eeg=False,
-                                        mindist=0,               #======same size with src
-                                        verbose=False
-                                       )
-        
-        raw = mne.io.read_raw_fif(raw_fif, preload=True, verbose=False)
-        
-        raw.filter(1., 40., phase='zero-double', verbose=False)
-        
-        rs_raw,rs_events = raw.resample(100, npad='auto', events=events, stim_picks='UPPT001', verbose=False)
-        
-        epochs = mne.Epochs(
-            rs_raw, rs_events, event_id={'stim_on': 2}, tmin=-0.1, tmax=0.8, verbose=False
-        )
-        
-        
-        
-        anim_flags = meta_sub['stim_is_animate'].astype(str).str.lower().eq('true').to_numpy()
-        idx_anim = anim_flags
-        idx_inanim = ~anim_flags
-        
-        
-        evoked_anim   = epochs[idx_anim].average()
-        evoked_inanim = epochs[idx_inanim].average()
+    
+        if fwd_file.exists():
+            print(" Loading FWD ")
+            fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
+        else:
+            print(" Computing FWD...")
+            fwd = mne.make_forward_solution(
+                clean.info, trans, src, bem_sol,
+                meg=True, eeg=False, mindist=0, verbose=False
+            )
+            mne.write_forward_solution(str(fwd_file), fwd, overwrite=True, verbose=False)
+            print(f"   Saved FWD to {fwd_file}")
         
         print("   Inverse...")
         inv = mne.minimum_norm.make_inverse_operator(
-            info=rs_raw.info,
+            info=clean.info,
             forward=fwd,
             noise_cov=noise_cov,
-            loose=1.0,     # free orientation
+            loose=1.0,    
             depth=0.8,
             fixed=False,
             verbose=False,
@@ -133,14 +153,13 @@ for i in range(1, 31):
         lambda2 = 1.0 / snr**2
         
         
-        
         stc_anim_vec = mne.minimum_norm.apply_inverse(
             evoked_anim, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False)
         
         stc_inan_vec = mne.minimum_norm.apply_inverse(
             evoked_inanim, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False)
         
-        #________morph______
+        
         print(f"   Morphing 1/2")
         src_fs2 = mne.read_source_spaces(f"{subjects_dir}/fsaverage2/bem/fsaverage2-vol-7-src.fif",verbose=False)
         
@@ -182,27 +201,22 @@ for i in range(1, 31):
             subjects_dir=subjects_dir,
             subject='fsaverage2')
         
-        save.pickle((stc_inan_vec_fs_nd,stc_anim_vec_fs_nd), modelfile)                 #morphed to fsaverage2 stc saved
+        save.pickle((stc_inan_vec_fs_nd,stc_anim_vec_fs_nd), modelfile)                 
         print(f"=====>{subject } done!")
-
-
-
-             
     except Exception as e:
-         print(f"Error processing {subject}: {e}")                 
-
-
+        print(f"Error processing {subject}: {e}")   
+        
 
 # %% [markdown]
 # # Group Analysis
 
 # %%
 cases = []
-for i in range(1, 21):
-    if (i == 11) or (i==21):           
+for i in range(1, 18):
+    if (i == 3) or (i==21):           
         continue
     subject = f"sub-{i:02d}"
-    modelfile = f"stc/{subject}.pickle"    
+    modelfile = f"models/{subject}-mne.pickle"    
 
     inanim, anim = load.unpickle(modelfile)    
     
@@ -211,6 +225,9 @@ for i in range(1, 21):
     
 data = Dataset.from_caselist(['subject', 'animacy', 'stc'], cases)
 data.tail()
+
+# %% [markdown]
+# ## Paired Test
 
 # %%
 res = testnd.VectorDifferenceRelated(
@@ -229,7 +246,8 @@ res = testnd.VectorDifferenceRelated(
 # %%
 diff= res.masked_difference()
 p = plot.Butterfly(diff.norm('space'), color='k',title='anim VS inanim')
-times = [0.35,0.45,0.48,0.52,0.6]
+times = [0.15,0.24,0.3,0.35,0.5,0.6]
+
 for t in times:
     p.add_vline(t)
 for t in times:
