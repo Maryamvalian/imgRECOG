@@ -26,7 +26,6 @@ from eelbrain import *
 from eelbrain import NDVar
 from eelbrain._data_obj import VolumeSourceSpace
 import os
-from morph_nd import morph_nd
 
 # %% [markdown]
 # # Create STC ans save model
@@ -49,15 +48,15 @@ root_epochs = Path("/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/e
 fwd_dir=Path("/Users/maryamvalian/Data/ds005810/derivatives/eelbrain/cache/raw")
 fwd_dir.mkdir(parents=True, exist_ok=True)
 
-for i in range(10, 31):
+for i in range(28, 29):
     if (i<10):
         run="01"
         session="ImageNet02" 
     elif (i==11) or (i==30): 
         run="01" 
         session="ImageNet01" 
-    elif i==28:
-        continue
+#    elif i==28:
+#        continue
     elif (i==22): 
         run="04" 
         session="ImageNet01"     
@@ -212,16 +211,19 @@ for i in range(10, 31):
 
 # %%
 cases = []
-for i in range(1, 18):
-    if (i == 3) or (i==21):           
-        continue
-    subject = f"sub-{i:02d}"
-    modelfile = f"models/{subject}-mne.pickle"    
-
-    inanim, anim = load.unpickle(modelfile)    
+for i in range(1, 31):
     
-    cases.append([subject, 'inanimate', inanim])
-    cases.append([subject, 'animate', anim])
+    subject = f"sub-{i:02d}"
+    modelfile = Path(f"models/{subject}-mne.pickle")    
+
+    if modelfile.exists():       
+    
+        inanim, anim = load.unpickle(modelfile)    
+        
+        cases.append([subject, 'inanimate', inanim])
+        cases.append([subject, 'animate', anim])
+    else:
+        print(f"{subject} Skipped")
     
 data = Dataset.from_caselist(['subject', 'animacy', 'stc'], cases)
 data.tail()
@@ -242,6 +244,7 @@ res = testnd.VectorDifferenceRelated(
     tstop=0.7,
     samples=1000
 )
+save.pickle(res, "Tests/mne_paired_test.pickle")
 
 # %%
 diff= res.masked_difference()
@@ -252,5 +255,9 @@ for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(diff.sub(time=t),title=f"anim vs inan(MNE), {t}s")  
+
+# %%
+
+# %%
 
 # %%
