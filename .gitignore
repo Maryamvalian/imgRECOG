@@ -11,5 +11,8 @@
 # Allow subdirectories (so Python files inside them are not blocked)
 !*/
 
+.ipynb_checkpoints/
+.ipynb_checkpoints/** 
+
 
 
