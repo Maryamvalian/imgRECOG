@@ -26,13 +26,16 @@ from eelbrain import *
 from eelbrain import NDVar
 from eelbrain._data_obj import VolumeSourceSpace
 import os
-from morph_nd import morph_nd
+from Beyond import morph_nd
 
 # %%
 root = Path("~/Data/ds005810")
 subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
 
 empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-noise_meg.fif"
+
+# %% [markdown]
+# # Creat Models
 
 # %%
 
@@ -45,7 +48,7 @@ for i in range(1, 10):
         session="ImageNet01" 
     
     subject = f"sub-{i:02d}"
-    modelfile = f"clean_models/ncrf/{subject}.pickle"
+    modelfile = f"models/ncrf/{subject}.pickle"
     raw_fif=root/f"{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-{run}_meg.fif"
     clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_meg_clean.fif"
     
@@ -154,5 +157,116 @@ for i in range(1, 10):
     except Exception as e:
          print(f"Error processing {subject}: {e}")                 
 
+
+# %% [markdown]
+# # Morph and save
+# ## Dataset from cases
+
+# %%
+cases = []
+for i in range(1, 31):
+    if i == 28:            #corrupted MEGs in all runs
+        continue
+    subject = f"sub-{i:02d}"
+    morphed_file = f"models/ncrf/{subject}-morphed.pickle"
+    
+    if os.path.exists(morphed_file):
+        print(f"Loading {subject} from file.")
+        inanim, anim = load.unpickle(morphed_file)
+    else:
+                  
+        print(f"Morphing {subject}...")
+        model_file = f"models/ncrf/{subject}.pickle"
+        model = load.unpickle(model_file)
+        hlist = model.h
+        inanim = hlist[0]
+        anim = hlist[1]
+               
+        anim_fs = morph_nd(subject, 'fsaverage2', subjects_dir, anim, 'vol-7')
+        inanim_fs = morph_nd(subject, 'fsaverage2', subjects_dir, inanim, 'vol-7')
+        
+        anim = anim_fs.smooth('source', 0.01, 'gaussian')
+        inanim = inanim_fs.smooth('source', 0.01, 'gaussian')
+        
+        save.pickle((inanim, anim), morphed_file)
+    
+    cases.append([subject, 'inanimate', inanim])
+    cases.append([subject, 'animate', anim])
+    
+data = Dataset.from_caselist(['subject', 'animacy', 'ncrf'], cases)
+data.head()
+
+# %% [markdown]
+# # Group Analysis
+# ## Paired Test
+
+# %%
+res = testnd.VectorDifferenceRelated(
+    'ncrf',             
+    'animacy',           
+    'inanimate',     
+    'animate',   
+    match='subject',     
+    data=data,     
+    tfce=True,           
+    tstart=0.1,
+    tstop=0.7,
+    samples=1000
+)
+save.pickle(res, "Tests/ncrf_paired_test.pickle")
+
+# %%
+diff= res.masked_difference()
+p = plot.Butterfly(diff.norm('space'), color='k',title='anim VS inanim')
+times = [0.15,0.24,0.3,0.35,0.5,0.6]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(diff.sub(time=t),title=f"anim vs inan, {t}s")  
+
+# %% [markdown]
+# ## ONE Sample test
+
+# %%
+data_inan = data.sub("animacy == 'inanimate'")
+result_inan = testnd.Vector('ncrf', match='subject', data=data_inan, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
+
+# %%
+p = plot.Butterfly(result_inan.masked_difference().norm('space'), color='k')
+times = [0.13,0.25,0.4]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(result_inan.masked_difference().sub(time=t),title=f"Inanimate, {t}s")  
+
+# %%
+data_an = data.sub("animacy == 'animate'")
+result_an = testnd.Vector('ncrf', match='subject', data=data_an, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
+result_an
+
+# %%
+p = plot.Butterfly(result_an.masked_difference().norm('space'), color='k')
+times = [0.13,0.22,0.27,0.4]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(result_an.masked_difference().sub(time=t),title=f"animate, {t}s")  
+
+# %% [markdown]
+# ## Average
+
+# %%
+agg=data.aggregate('animacy', drop_bad=True)
+agg_in = agg.sub("animacy == 'inanimate'")
+agg_an = agg.sub("animacy == 'animate'")
+
+diff=agg_an['ncrf']- agg_in['ncrf']
+
+p = plot.Butterfly(diff.norm('space'), color='k')
+times = [0.12,0.17,0.28,0.45]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(diff.sub(time=t),title=f"diff: animate-Inanimate, {t}s") 
 
 # %%
