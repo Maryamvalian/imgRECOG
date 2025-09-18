@@ -214,7 +214,7 @@ cases = []
 for i in range(1, 31):
     
     subject = f"sub-{i:02d}"
-    modelfile = Path(f"models/{subject}-mne.pickle")    
+    modelfile = Path(f"models/mne/{subject}-mne.pickle")    
 
     if modelfile.exists():       
     
@@ -256,8 +256,32 @@ for t in times:
 for t in times:
     f = plot.GlassBrain(diff.sub(time=t),title=f"anim vs inan(MNE), {t}s")  
 
-# %%
+# %% [markdown]
+# # One sample test
+#
 
 # %%
+data_inan = data.sub("animacy == 'inanimate'")
+result_inan = testnd.Vector('stc', match='subject', data=data_inan, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
+
+data_an = data.sub("animacy == 'animate'")
+result_an = testnd.Vector('stc', match='subject', data=data_an, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
+
+save.pickle((result_an,result_inan), "Tests/mne_1sampletest.pickle")
+
+# %%
+p = plot.Butterfly(result_inan.masked_difference().norm('space'), color='k')
+times = [0.13,0.25,0.4]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(result_inan.masked_difference().sub(time=t),title=f"Inanimate, {t}s")  
+
+p = plot.Butterfly(result_an.masked_difference().norm('space'), color='k')
+times = [0.13,0.25,0.4]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(result_an.masked_difference().sub(time=t),title=f"animate, {t}s")     
 
 # %%
