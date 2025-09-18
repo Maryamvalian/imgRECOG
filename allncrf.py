@@ -29,33 +29,48 @@ import os
 from Beyond import morph_nd
 
 # %%
+mod="effect"  #effect, dummy, unbalanced (effect with unbalanced trial counts)
+
 root = Path("~/Data/ds005810")
 subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
-
+fwd_dir=Path("/Users/maryamvalian/Data/ds005810/derivatives/eelbrain/cache/raw")
 empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-noise_meg.fif"
 
 # %% [markdown]
 # # Creat Models
 
 # %%
+raw_er = mne.io.read_raw_fif(empty_room, preload=True, verbose=False).pick('meg')
+raw_er.filter(1., 40., phase="zero-double", verbose=False)
+raw_er.resample(100, npad="auto", verbose=False)
+noise_cov = mne.compute_raw_covariance(raw_er, method='shrunk', rank=None,verbose=False)
 
-for i in range(1, 10):
+for i in range(1, 31):
     if (i<10):
         run="01"
-        session="ImageNet02" 
-    else:
+        session="ImageNet02"
+    elif i==22:
         run="04"
+        session="ImageNet01" 
+    elif (i==11) or (i==30):
+        run="01"
+        session="ImageNet01"
+        
+    else:
+        run="05"
         session="ImageNet01" 
     
     subject = f"sub-{i:02d}"
-    modelfile = f"models/ncrf/{subject}.pickle"
+    modelfile = f"models/ncrf_effect/{mod}-{subject}.pickle"
     raw_fif=root/f"{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-{run}_meg.fif"
     clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_meg_clean.fif"
+    fwd_file=fwd_dir / f"{subject}_{session}/{subject}-fwd.fif"
     
     if os.path.exists(modelfile):
         print(f"{subject} loaded from file.")
         continue
     try:
+        print(f"extracting {subject}...")
         raw = mne.io.read_raw_fif(raw_fif, preload=True,verbose=False)
         clean = mne.io.read_raw_fif(clean_fif, preload=True,verbose=False)
         events = find_events(raw, stim_channel="UPPT001")
@@ -89,19 +104,30 @@ for i in range(1, 10):
         for t, is_anim in zip(event_table['time'], event_table['animate']):
             idx = int(round((t ) * sfreq))
             if 0 <= idx < n_times:
-                if is_anim:
-                    stim2[idx] = 1.0
-                else:
+                if mod=='dummy':
+                    
+                    if is_anim:
+                        stim2[idx]= 1.0
+                    else:
+                        stim1[idx]= 1.0
+                        
+                elif mod=='effect':
+                    
                     stim1[idx] = 1.0
+                    stim2[idx] = 1.0 if is_anim else -1.0
+
+                elif mod=='unbalanced':
+                    
+                    n_a =int(event_table['animate'].sum())
+                    n_i =int((~event_table['animate']).sum())
+                    N=n_a+n_i
+                    code_anim,code_inanim = (n_i / N),-(n_a / N)
+                    stim1[idx]= 1.0
+                    stim2[idx]= code_anim if is_anim else code_inanim
+                        
         stim1 = NDVar(stim1, time)
         stim2 = NDVar(stim2, time)
         #p=plot.LineStack(combine([stim1, stim2]), ylabels=["inanimate", "animate"], offset=1.5)
-
-        raw_er = mne.io.read_raw_fif(empty_room, preload=True, verbose=False).pick('meg')
-        raw_er.filter(1., 40., phase="zero-double", verbose=False)
-        raw_er.resample(100, npad="auto", verbose=False)
-        noise_cov = mne.compute_raw_covariance(raw_er, method='shrunk', rank=None,verbose=False)
-
         
         src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
         src = mne.read_source_spaces(str(src_file),verbose=False)
@@ -112,13 +138,21 @@ for i in range(1, 10):
         
         trans_fif= f"{root}/derivatives/trans/{subject}-{session}-trans.fif"
         trans=mne.read_trans(trans_fif)
+
         
-        fwd = mne.make_forward_solution(meg.info,trans ,
-                                        src, bem_sol,
-                                        meg=True, eeg=False,
-                                        mindist=0,               #======same size with src
-                                        verbose=False
-                                       )
+        fwd_file=fwd_dir / f"{subject}_{session}/{subject}-fwd.fif"
+        if fwd_file.exists():
+            print(" Loading FWD ")
+            fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
+        else:
+            print(" Computing FWD...")
+            fwd = mne.make_forward_solution(
+                clean.info, trans, src, bem_sol,
+                meg=True, eeg=False, mindist=0, verbose=False
+            )
+            mne.write_forward_solution(str(fwd_file), fwd, overwrite=True, verbose=False)
+            print(f"   Saved FWD to {fwd_file}")
+        
         
         #convert fwd to ndvar
         lf = load.mne.forward_operator(fwd,src='vol-7',
@@ -126,7 +160,7 @@ for i in range(1, 10):
                                        adjacency=False,parc='aparc+aseg') 
         lf  = lf.sub(sensor=meg_ndvar.sensor)  
 
-        print(len(src[0]['vertno']))
+        print(len(src[0]['vertno']))           #check sanity
         print(len(fwd['src'][0]['vertno']))  
 
         print(f"Fitting NCRF")
@@ -140,19 +174,15 @@ for i in range(1, 10):
                 )
         kwargs = {'normalize': 'l1',
                           'in_place': False,
-                          'mu':'auto',
+                          'mu':"auto",
                           'verbose': True, 
                           'n_iter': 10,
                           'n_iterc': 10,
                           'n_iterf': 100} 
-        model = fit_ncrf(*args, **kwargs)  
-        
-        #---------------
-        
+        model = fit_ncrf(*args, **kwargs)       
         save.pickle(model, modelfile)
         
-        hlist=model.h
-        print(f"==================>{subject} done!")
+        print(f"==================>{subject} model saved!")
         
     except Exception as e:
          print(f"Error processing {subject}: {e}")                 
@@ -168,7 +198,8 @@ for i in range(1, 31):
     if i == 28:            #corrupted MEGs in all runs
         continue
     subject = f"sub-{i:02d}"
-    morphed_file = f"models/ncrf/{subject}-morphed.pickle"
+    
+    morphed_file = f"models/ncrf_effect/{mod}-{subject}-morphed.pickle"
     
     if os.path.exists(morphed_file):
         print(f"Loading {subject} from file.")
@@ -176,11 +207,17 @@ for i in range(1, 31):
     else:
                   
         print(f"Morphing {subject}...")
-        model_file = f"models/ncrf/{subject}.pickle"
+        model_file = f"models/ncrf_effect/{mod}-{subject}.pickle"
         model = load.unpickle(model_file)
         hlist = model.h
-        inanim = hlist[0]
-        anim = hlist[1]
+        
+        if mod=="dummy":
+            inanim = hlist[0]
+            anim = hlist[1]
+        elif mod=="effect":
+            h_mean, h_contrast = hlist[0], hlist[1]
+            anim   = h_mean + h_contrast
+            inanim = h_mean - h_contrast 
                
         anim_fs = morph_nd(subject, 'fsaverage2', subjects_dir, anim, 'vol-7')
         inanim_fs = morph_nd(subject, 'fsaverage2', subjects_dir, inanim, 'vol-7')
@@ -213,7 +250,7 @@ res = testnd.VectorDifferenceRelated(
     tstop=0.7,
     samples=1000
 )
-save.pickle(res, "Tests/ncrf_paired_test.pickle")
+save.pickle(res, f"Tests/{mod}-ncrf_paired_test.pickle")
 
 # %%
 diff= res.masked_difference()
@@ -243,10 +280,14 @@ for t in times:
 data_an = data.sub("animacy == 'animate'")
 result_an = testnd.Vector('ncrf', match='subject', data=data_an, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
 result_an
+save.pickle((result_an,result_inan), f"Tests/{mod}-ncrf_1samptest.pickle")
+
+# %%
+save.pickle((result_an,result_inan), f"Tests/ncrf_1samptest.pickle")
 
 # %%
 p = plot.Butterfly(result_an.masked_difference().norm('space'), color='k')
-times = [0.13,0.22,0.27,0.4]
+times = [0.13,0.25,0.4]
 for t in times:
     p.add_vline(t)
 for t in times:
@@ -268,5 +309,27 @@ for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(diff.sub(time=t),title=f"diff: animate-Inanimate, {t}s") 
+
+# %%
+n_a = int(event_table['animate'].sum())
+n_i = int((~event_table['animate']).sum())
+N   = n_a + n_i
+code_anim, code_inanim = (n_i / N), -(n_a / N)
+
+# %%
+N
+
+
+# %%
+n_i
+
+# %%
+n_i/N
+
+# %%
+n_a/N
+
+# %%
+stim2[times[m]] = np.where(anims[m], code_anim, code_inanim)
 
 # %%
