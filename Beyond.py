@@ -9,7 +9,7 @@ from eelbrain import NDVar
 from eelbrain._data_obj import VolumeSourceSpace
 
 
-def GlassBrainVideo(tmin, tmax, dt, nd, vname, quality):
+def GlassBrainVideo(tmin, tmax, dt, nd, vname):
     """
     from Beyond import GlassBrainVideo
     GlassBrainVideo(0.1, 0.8, 0.1, anim, "v4")
