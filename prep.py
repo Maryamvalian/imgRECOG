@@ -299,18 +299,17 @@ for i in range(2, 31):
     out = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
     mne.write_source_spaces(out, src,overwrite=True)
 
+# %% [markdown]
+# # Create SRC : force RH,LH but MERGED !!!
+
 # %%
 # Force LH,RH but merged
-subject = "sub-01"
-
-
-
 
 from eelbrain.mne_fixes._source_space import merge_volume_source_space, prune_volume_source_space
 
 subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
 
-for i in range(8, 9):
+for i in range(8, 9):   #=================================Choose subject
     
     subject = f"sub-{i:02d}"
     
@@ -327,11 +326,11 @@ for i in range(8, 9):
         pos=7.0,                      
         verbose=False,
     )
-   # src_mrg = merge_volume_source_space(src_lr, "cortex")
+    src_mrg = merge_volume_source_space(src_lr, "cortex")
    # src = prune_volume_source_space(src_mrg, 7, 3, remove_midline=True, fill_holes=4)     #int(7): vol-7
     
     out = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
-    mne.write_source_spaces(out, src_lr,overwrite=True)
+    mne.write_source_spaces(out, src_mrg,overwrite=True)
 
 # %% [markdown]
 # # Create (vol-7-R) & (vol-7-L)
@@ -362,15 +361,6 @@ mne.write_source_spaces(f"{subjects_dir}/{subject}/bem/{subject}-vol-7-L-src.fif
 mne.write_source_spaces(f"{subjects_dir}/{subject}/bem/{subject}-vol-7-R-src.fif",
                         src_R, overwrite=True)
 src_R,src_L
-
-# %%
-src_lr
-
-# %%
-src_mrg
-
-# %%
-src
 
 # %% [markdown]
 # ### 5. Biuld FWD
