@@ -48,15 +48,13 @@ root_epochs = Path("/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/e
 fwd_dir=Path("/Users/maryamvalian/Data/ds005810/derivatives/eelbrain/cache/raw")
 fwd_dir.mkdir(parents=True, exist_ok=True)
 
-for i in range(28, 29):
+for i in range(1, 31):
     if (i<10):
         run="01"
         session="ImageNet02" 
     elif (i==11) or (i==30): 
         run="01" 
         session="ImageNet01" 
-#    elif i==28:
-#        continue
     elif (i==22): 
         run="04" 
         session="ImageNet01"     
@@ -68,9 +66,9 @@ for i in range(28, 29):
     
     epo_file = root_epochs / f"{subject}_meg_epo.fif"
     clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_clean_meg.fif"
-    fwd_file=fwd_dir / f"{subject}_{session}/{subject}-fwd.fif"
+    fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
     fwd_file.parent.mkdir(parents=True, exist_ok=True)
-    modelfile = f"models/{subject}-mne.pickle"
+    modelfile = f"models/mne/{subject}-mne.pickle"
 
     if os.path.exists(modelfile):
         print(f"{subject} loaded from file.")
@@ -99,7 +97,7 @@ for i in range(28, 29):
         )
     
         epochs_in = epochs_resamp[mask_in]
-        print(len(epochs_in))
+        print(f"#Inanim={len(epochs_in)}")
     
     
         mask_an = (
@@ -110,13 +108,13 @@ for i in range(28, 29):
         )
     
         epochs_an = epochs_resamp[mask_an]
-        print(len(epochs_an))
+        print(f"#Animate={len(epochs_an)}")
 
         evoked_anim   = epochs_an.average()
         evoked_inanim = epochs_in.average()
     
     
-        src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
+        src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"       #************
         src = mne.read_source_spaces(str(src_file),verbose=False)
     
         bem_sol_fif=f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
@@ -161,10 +159,11 @@ for i in range(28, 29):
         
         print(f"   Morphing 1/2")
         src_fs2 = mne.read_source_spaces(f"{subjects_dir}/fsaverage2/bem/fsaverage2-vol-7-src.fif",verbose=False)
+        src_from=fwd['src'] # <==========When mismatch between src and fwd
         
         morph = mne.compute_source_morph(
             
-            src=src,
+            src=src_from, # <===========
             subject_from=subject,
             subject_to="fsaverage2",     
             subjects_dir=subjects_dir,
@@ -178,7 +177,7 @@ for i in range(28, 29):
         print(f"   Morphing 2/2")
         morph = mne.compute_source_morph(
                                 
-            src=src,
+            src=src_from, # <==============
             subject_from=subject,
             subject_to="fsaverage2",     
             subjects_dir=subjects_dir,
@@ -211,7 +210,7 @@ for i in range(28, 29):
 
 # %%
 cases = []
-for i in range(1, 31):
+for i in range(1, 22):
     
     subject = f"sub-{i:02d}"
     modelfile = Path(f"models/mne/{subject}-mne.pickle")    
@@ -226,7 +225,7 @@ for i in range(1, 31):
         print(f"{subject} Skipped")
     
 data = Dataset.from_caselist(['subject', 'animacy', 'stc'], cases)
-data.tail()
+data.head()
 
 # %% [markdown]
 # ## Paired Test
@@ -283,5 +282,11 @@ for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(result_an.masked_difference().sub(time=t),title=f"animate, {t}s")     
+
+# %%
+
+# %%
+
+# %%
 
 # %%
