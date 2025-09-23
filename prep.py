@@ -35,7 +35,7 @@ clean= mne.io.read_raw_fif("/Users/maryamvalian/Data/ds005810/derivatives/prepro
 # %%
 events = find_events(raw, stim_channel="UPPT001")
 
-fig = mne.viz.plot_events(events, sfreq=raw.info["sfreq"], first_samp=raw.first_samp)
+#fig = mne.viz.plot_events(events, sfreq=raw.info["sfreq"], first_samp=raw.first_samp)
 #ID:  
 #1 begin
 #2 stim_on
@@ -58,10 +58,10 @@ epochs = mne.Epochs(raw, events, tmin=-0.1, tmax=0.8, baseline=(-0.1, 0))
 evoked = epochs.average()
 
 
-p=evoked.plot()
+#p=evoked.plot()
 
 
-evoked.plot_topomap(times=[0.1, 0.2, 0.3], ch_type="mag")
+#evoked.plot_topomap(times=[0.1, 0.2, 0.3], ch_type="mag")
 
 # %%
 meta = pd.read_csv("/Users/maryamvalian/Data/ds005810/derivatives/detailed_events/sub-01_events.csv")
@@ -118,6 +118,7 @@ import  shutil
 
 SUBJECTS_DIR = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
 
+FS_HOME = "/Applications/freesurfer/8.1.0"
 os.environ["FREESURFER_HOME"] = FS_HOME
 os.environ["SUBJECTS_DIR"] = SUBJECTS_DIR
 os.environ["FS_LICENSE"] = f"{FS_HOME}/.license"  
@@ -242,11 +243,17 @@ mne.scale_mri('fsaverage', subject, scale, subjects_dir=subjects_dir, labels=Fal
 """
 
 # %% [markdown]
-# ### 4. create src FORCE INNER SKULL
+# ### 4. create src 
+# #### FORCE INNER SKULL
 
 # %%
-#Drop sources outside of Inner_skull.surf otherwise not consistent with source in fwd later we will make)
-for i in range(11, 31):
+subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
+
+# %%
+#Drop sources outside of Inner_skull.surf otherwise not consistent 
+#with source in fwd later we will make)
+"""
+for i in range(1, 31):
     
     subject = f"sub-{i:02d}"
 
@@ -258,7 +265,112 @@ for i in range(11, 31):
     
     mne.write_source_spaces(f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif", src, overwrite=True,verbose=False)
     print(f"Source created for {subject}: {src}")
+"""
 
+# %% [markdown]
+# ## Force cortex
+
+# %%
+# Keep ONLY cortex 
+from eelbrain.mne_fixes._source_space import merge_volume_source_space, prune_volume_source_space
+
+subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
+subject = "sub-01"
+for i in range(2, 31):
+    
+    subject = f"sub-{i:02d}"
+    
+    aseg = os.path.join(subjects_dir, subject, "mri", "aseg.mgz")
+    bem  = os.path.join(subjects_dir, subject, "bem", f"{subject}-bem-sol.fif")
+    cortex_labels = ["Left-Cerebral-Cortex", "Right-Cerebral-Cortex"]
+    
+    src_lr = mne.setup_volume_source_space(
+        subject=subject,
+        subjects_dir=subjects_dir,
+        mri=aseg,
+        bem=bem,  
+        volume_label=cortex_labels,   
+        pos=7.0,                      
+        verbose=False,
+    )
+    src_mrg = merge_volume_source_space(src_lr, "cortex")
+    src = prune_volume_source_space(src_mrg, 7, 3, remove_midline=True, fill_holes=4)     #int(7): vol-7
+    
+    out = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
+    mne.write_source_spaces(out, src,overwrite=True)
+
+# %%
+# Force LH,RH but merged
+subject = "sub-01"
+
+
+
+
+from eelbrain.mne_fixes._source_space import merge_volume_source_space, prune_volume_source_space
+
+subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
+
+for i in range(8, 9):
+    
+    subject = f"sub-{i:02d}"
+    
+    aseg = os.path.join(subjects_dir, subject, "mri", "aseg.mgz")
+    bem  = os.path.join(subjects_dir, subject, "bem", f"{subject}-bem-sol.fif")
+    cortex_labels = ["Left-Cerebral-Cortex", "Right-Cerebral-Cortex"]
+    
+    src_lr = mne.setup_volume_source_space(
+        subject=subject,
+        subjects_dir=subjects_dir,
+        mri=aseg,
+        bem=bem,  
+        volume_label=cortex_labels,   
+        pos=7.0,                      
+        verbose=False,
+    )
+   # src_mrg = merge_volume_source_space(src_lr, "cortex")
+   # src = prune_volume_source_space(src_mrg, 7, 3, remove_midline=True, fill_holes=4)     #int(7): vol-7
+    
+    out = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
+    mne.write_source_spaces(out, src_lr,overwrite=True)
+
+# %% [markdown]
+# # Create (vol-7-R) & (vol-7-L)
+
+# %%
+subject="sub-08"
+
+# %%
+# Build single-hemi volume srcs (each returns a proper SourceSpaces)
+src_L = mne.setup_volume_source_space(
+    subject=subject, subjects_dir=subjects_dir,
+    mri=os.path.join(subjects_dir, subject, "mri", "aseg.mgz"),
+    bem=os.path.join(subjects_dir, subject, "bem", f"{subject}-bem-sol.fif"),
+    volume_label=["Left-Cerebral-Cortex"],
+    pos=7.0, verbose=False
+)
+src_R = mne.setup_volume_source_space(
+    subject=subject, subjects_dir=subjects_dir,
+    mri=os.path.join(subjects_dir, subject, "mri", "aseg.mgz"),
+    bem=os.path.join(subjects_dir, subject, "bem", f"{subject}-bem-sol.fif"),
+    volume_label=["Right-Cerebral-Cortex"],
+    pos=7.0, verbose=False
+)
+
+# Write files with names Eelbrain expects (…-{src}-src.fif)
+mne.write_source_spaces(f"{subjects_dir}/{subject}/bem/{subject}-vol-7-L-src.fif",
+                        src_L, overwrite=True)
+mne.write_source_spaces(f"{subjects_dir}/{subject}/bem/{subject}-vol-7-R-src.fif",
+                        src_R, overwrite=True)
+src_R,src_L
+
+# %%
+src_lr
+
+# %%
+src_mrg
+
+# %%
+src
 
 # %% [markdown]
 # ### 5. Biuld FWD
@@ -289,7 +401,7 @@ mne.write_forward_solution(mne_out/subject/f"{subject}-fwd.fif", fwd, overwrite=
 #
 
 # %%
-"""
+
 subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
 surf = Path(subjects_dir) / "fsaverage2" / "bem" / "inner_skull.surf"
 
@@ -300,13 +412,91 @@ src_fs = mne.setup_volume_source_space(
     mri="aseg.mgz",
     surface=str(surf),          # constrain to inner skull
 )
-mne.write_source_spaces(f"{subjects_dir}/fsaverage2/bem/fsaverage-vol-7-src.fif",
+mne.write_source_spaces(f"{subjects_dir}/fsaverage2/bem/fsaverage2-vol-7-src.fif",
                         src_fs, overwrite=True)
 
 #___________________
 #befor force: n_used=8925
 #after: n_used=5222
 
-"""
+
+
+# %% [markdown]
+# # create (vol-7-src) for fsaverage2 force cortex (merged hemis)
+
+# %%
+subject="fsaverage2"
+from eelbrain.mne_fixes._source_space import merge_volume_source_space, prune_volume_source_space
+subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
+
+aseg = os.path.join(subjects_dir, subject, "mri", "aseg.mgz")
+
+cortex_labels = ["Left-Cerebral-Cortex", "Right-Cerebral-Cortex"]
+
+src_fs = mne.setup_volume_source_space(
+    subject=subject,
+    subjects_dir=subjects_dir,
+    mri=aseg,
+    bem=os.path.join(subjects_dir, "fsaverage2", "bem", "fsaverage2-bem-sol.fif"),
+    volume_label=cortex_labels,   
+    pos=7.0,                      
+    verbose=False,
+)
+src_mrg=src = merge_volume_source_space(src_fs, "cortex")
+#src = prune_volume_source_space(src_mrg, 7, 3, remove_midline=True, fill_holes=4)     #int(7): vol-7
+
+mne.write_source_spaces(f"{subjects_dir}/fsaverage2/bem/fsaverage2-vol-7-src.fif",
+                        src_mrg, overwrite=True)
+
+# %%
+src_mrg
+
+# %% [markdown]
+# # CREATE (VOL-7-L-src) AND (vol-7-R-src) for fsaverage
+
+# %%
+# Build single-hemi volume srcs 
+subject="fsaverage2"
+subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
+
+src_L = mne.setup_volume_source_space(
+    subject=subject, subjects_dir=subjects_dir,
+    mri=os.path.join(subjects_dir, subject, "mri", "aseg.mgz"),
+    bem=os.path.join(subjects_dir, subject, "bem", f"{subject}-bem-sol.fif"),
+    volume_label=["Left-Cerebral-Cortex"],
+    pos=7.0, verbose=False
+)
+src_R = mne.setup_volume_source_space(
+    subject=subject, subjects_dir=subjects_dir,
+    mri=os.path.join(subjects_dir, subject, "mri", "aseg.mgz"),
+    bem=os.path.join(subjects_dir, subject, "bem", f"{subject}-bem-sol.fif"),
+    volume_label=["Right-Cerebral-Cortex"],
+    pos=7.0, verbose=False
+)
+
+# Write files with names Eelbrain expects (…-{src}-src.fif)
+mne.write_source_spaces(f"{subjects_dir}/{subject}/bem/{subject}-vol-7-L-src.fif",
+                        src_L, overwrite=True)
+mne.write_source_spaces(f"{subjects_dir}/{subject}/bem/{subject}-vol-7-R-src.fif",
+                        src_R, overwrite=True)
+
+
+# %% [markdown]
+# # CREATE BEM SOL FOR FSAVERAGE2
+
+# %%
+#first run setup home for freesurfer from above
+subject="fsaverage2"
+subjects_dir = os.environ["SUBJECTS_DIR"]
+mne.bem.make_watershed_bem(subject=subject, subjects_dir=subjects_dir, overwrite=True,verbose=False)
+    
+# single-layer for MEG! 
+model = mne.make_bem_model(subject=subject, subjects_dir=subjects_dir,
+                           ico=5, conductivity=(0.3,),verbose=False)
+bem = mne.make_bem_solution(model)
+
+out_bem = f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
+mne.write_bem_solution(out_bem, bem, overwrite=True,verbose=False)
+print(f"{subject}-bem-sol.fif saved successfully.")
 
 # %%
