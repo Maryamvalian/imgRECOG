@@ -5,7 +5,7 @@ import imageio.v2 as imageio
 import matplotlib.pyplot as plt
 from eelbrain import plot
 import mne
-from eelbrain import NDVar
+from eelbrain import NDVar,load
 from eelbrain._data_obj import VolumeSourceSpace
 
 
@@ -119,3 +119,90 @@ def morph_nd(subject_from, subject_to, subjects_dir, ndvar, src):
     ndvar_fs = NDVar(Y_fs, (source_fs,) + ndvar.dims[1:], name='Morphed_nd')
     
     return ndvar_fs
+
+
+    #-----------------------------------
+
+def morph_hemi(stc_vec, subject, subject_to="fsaverage2", *, subjects_dir, src_tag="vol-7"):
+    
+    #For all subjects and fsaverage2 vol-7-L-src , vol-7-R-src should exist in bem folder
+    #STC should be on vol-7-lr-src where LH,RH are not merged by eelbrain
+    #returns LH,RH,Both (NDvars) morphed to fsaverage2 
+    
+    src_L = mne.read_source_spaces(
+        f"{subjects_dir}/{subject}/bem/{subject}-{src_tag}-L-src.fif", verbose=False)
+    src_R = mne.read_source_spaces(
+        f"{subjects_dir}/{subject}/bem/{subject}-{src_tag}-R-src.fif", verbose=False)
+
+    # split STC by hemi 
+    if len(stc_vec.vertices) != 2:
+        raise ValueError("stc_vec must come from an LR source (two vertices arrays: LH & RH).")
+    vL, vR = stc_vec.vertices
+    nL = len(vL)
+    X  = stc_vec.data  
+
+    stc_L = mne.VolVectorSourceEstimate(X[:nL],   [vL], stc_vec.tmin, stc_vec.tstep, stc_vec.subject)
+    stc_R = mne.VolVectorSourceEstimate(X[nL:],   [vR], stc_vec.tmin, stc_vec.tstep, stc_vec.subject)
+
+    # subject_to
+    src_to_L = mne.read_source_spaces(
+        f"{subjects_dir}/{subject_to}/bem/{subject_to}-{src_tag}-L-src.fif", verbose=False)
+    src_to_R = mne.read_source_spaces(
+        f"{subjects_dir}/{subject_to}/bem/{subject_to}-{src_tag}-R-src.fif", verbose=False)
+
+    #morph each hemi 
+    morph_L = mne.compute_source_morph(
+        src=src_L, subject_from=subject, subject_to=subject_to,
+        subjects_dir=subjects_dir, src_to=src_to_L, precompute=True, verbose=False)
+    stc_L_fs = morph_L.apply(stc_L)
+
+    morph_R = mne.compute_source_morph(
+        src=src_R, subject_from=subject, subject_to=subject_to,
+        subjects_dir=subjects_dir, src_to=src_to_R, precompute=True, verbose=False)
+    stc_R_fs = morph_R.apply(stc_R)
+
+    # convert  NDVars 
+    an_L_fs = load.mne.stc_ndvar(stc_L_fs, src=f"{src_tag}-L",
+                                 subjects_dir=subjects_dir, subject=subject_to)
+    an_R_fs = load.mne.stc_ndvar(stc_R_fs, src=f"{src_tag}-R",
+                                 subjects_dir=subjects_dir, subject=subject_to)
+
+    #  stitch LH+RH onto the merged whole-brain fsaverage2 
+    src_wh = mne.read_source_spaces(
+        f"{subjects_dir}/{subject_to}/bem/{subject_to}-{src_tag}-src.fif", verbose=False)
+    v_wh = src_wh[0]['vertno']          # merged vertex IDs
+
+    vL_to = stc_L_fs.vertices[0]
+    vR_to = stc_R_fs.vertices[0]
+
+    # consistency checks
+    overlap = np.intersect1d(vL_to, vR_to)
+    if overlap.size:
+        raise RuntimeError(f"L/R vertex overlap on target grid: {overlap[:10]}")
+    missL = np.setdiff1d(vL_to, v_wh)
+    missR = np.setdiff1d(vR_to, v_wh)
+    if missL.size or missR.size:
+        raise RuntimeError("Some hemi vertices not present in merged fsaverage2 grid; "
+                           "check that {src_tag} and pruning match on both sides.")
+
+    # map vertex IDs → row indices in merged grid
+    idx_wh = {v: i for i, v in enumerate(v_wh)}
+    idxL = np.fromiter((idx_wh[v] for v in vL_to), dtype=int, count=len(vL_to))
+    idxR = np.fromiter((idx_wh[v] for v in vR_to), dtype=int, count=len(vR_to))
+
+    # fill whole-brain array
+    T = stc_L_fs.data.shape[2]
+    data_wh = np.zeros((len(v_wh), 3, T), dtype=stc_L_fs.data.dtype)
+    data_wh[idxL] = stc_L_fs.data
+    data_wh[idxR] = stc_R_fs.data
+
+    stc_vec_fs_both = mne.VolVectorSourceEstimate(
+        data_wh, [v_wh], stc_L_fs.tmin, stc_L_fs.tstep, subject=subject_to)
+
+    # convert ndvar
+    an_both = load.mne.stc_ndvar(stc_vec_fs_both, src=src_tag,
+                                 subjects_dir=subjects_dir, subject=subject_to)
+
+    return an_R_fs, an_L_fs, an_both
+    
+    
