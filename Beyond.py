@@ -7,7 +7,80 @@ from eelbrain import plot
 import mne
 from eelbrain import NDVar,load
 from eelbrain._data_obj import VolumeSourceSpace
+#from scipy.sparse import block_diag, csr_matrix
+from scipy.spatial import cKDTree
 
+
+
+
+def ndvar_merged_to_stc_lr(ndvar, *, fwd, subject, subjects_dir, src_tag="vol-7"):
+    
+    tdim= next((d for d in ndvar.dims if getattr(d, 'type', None) == 'time'), None)
+    tmin= float(getattr(tdim, 'tmin', 0.0))
+    tstep= float(getattr(tdim, 'tstep', 1.0))
+
+    # merged forward src 
+    src_merged= fwd['src']; assert len(src_merged) == 1
+    actv= src_merged[0]['vertno']              # merged active vertex IDs (1D int array)
+    n_from= actv.size
+
+    
+    srcL = mne.read_source_spaces(
+        f"{subjects_dir}/{subject}/bem/{subject}-{src_tag}-L-src.fif", verbose=False)
+    srcR = mne.read_source_spaces(
+        f"{subjects_dir}/{subject}/bem/{subject}-{src_tag}-R-src.fif", verbose=False)
+    vL = srcL[0]['vertno']
+    vR = srcR[0]['vertno']
+
+    
+    pos = {int(v): i for i, v in enumerate(actv)}
+    try:
+        idxL = np.fromiter((pos[int(v)] for v in vL), dtype=int, count=vL.size)
+        idxR = np.fromiter((pos[int(v)] for v in vR), dtype=int, count=vR.size)
+    except KeyError as e:
+        missing = int(e.args[0])
+        raise RuntimeError(
+            f"Vertex id {missing} from split L/R is not present in merged vertno. "
+            "This indicates your merged forward and split vol-7 src were generated with "
+            "different pruning/spacing. Rebuild to match."
+        )
+
+    
+    if np.intersect1d(idxL, idxR).size:
+        raise RuntimeError("L/R index overlap via vertex IDs — split files are inconsistent.")
+    if idxL.size + idxR.size != n_from:
+        
+        raise RuntimeError(
+            f"Counts mismatch: merged={n_from}, L={idxL.size}, R={idxR.size}. "
+            "Ensure split and merged vol-7 come from the same config."
+        )
+
+    # extract data in L-then-R order
+    Y= ndvar.get_data()
+    if Y.ndim == 2:
+        # (src, T) scalar
+        Y_lr = np.vstack([Y[idxL, :], Y[idxR, :]])
+        stc = mne.VolSourceEstimate(Y_lr, [vL, vR], tmin, tstep, subject=subject)
+    elif Y.ndim == 3:
+        if Y.shape[1] == 3 and Y.shape[2] > 3:
+            # (src, 3, T)
+            YL = Y[idxL, :, :]; YR = Y[idxR, :, :]
+            Y_lr = np.concatenate([YL, YR], axis=0)
+            stc = mne.VolVectorSourceEstimate(Y_lr, [vL, vR], tmin, tstep, subject=subject)
+        elif Y.shape[2] == 3 and Y.shape[1] > 3:
+            # (src, T, 3) → transpose to (src, 3, T)
+            Yt = np.transpose(Y, (0, 2, 1))
+            YL = Yt[idxL, :, :]; YR = Yt[idxR, :, :]
+            Y_lr = np.concatenate([YL, YR], axis=0)
+            stc = mne.VolVectorSourceEstimate(Y_lr, [vL, vR], tmin, tstep, subject=subject)
+        else:
+            raise ValueError(f"Unexpected 3D shape {Y.shape}. Use (src, 3, T) or (src, T, 3).")
+    else:
+        raise ValueError(f"Unexpected NDVar ndim={Y.ndim}; expected 2 or 3.")
+    return stc
+
+
+#------------------------------------------------------------------------------
 
 def GlassBrainVideo(tmin, tmax, dt, nd, vname):
     """
