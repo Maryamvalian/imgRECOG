@@ -27,10 +27,12 @@ from eelbrain import NDVar
 from eelbrain._data_obj import VolumeSourceSpace
 import os
 from Beyond import morph_nd
+from Beyond import ndvar_merged_to_stc_lr
+from Beyond import morph_hemi
 
 # %%
-mod="effect"  #effect, dummy, unbalanced (effect with unbalanced trial counts)
-
+mod="dummy"  #effect, dummy, ortho (effect with unbalanced trial counts)
+rewrite=True
 root = Path("~/Data/ds005810")
 subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
 fwd_dir=Path("/Users/maryamvalian/Data/ds005810/derivatives/eelbrain/cache/raw")
@@ -38,6 +40,11 @@ empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-
 
 # %% [markdown]
 # # Creat Models
+# WB works well <br>
+# Cortex -> src should be merged! otherwise can not convert fwd to ndvar to feed fit_ncef<br>
+# morph_nd drops right  brain when src is cortex<br>
+# src is cortex-merged but not pruned.<br>
+# **when change src type (cortex, merged, WB,..) make sure fwd is overwrited**<br>
 
 # %%
 raw_er = mne.io.read_raw_fif(empty_room, preload=True, verbose=False).pick('meg')
@@ -61,9 +68,9 @@ for i in range(1, 31):
         session="ImageNet01" 
     
     subject = f"sub-{i:02d}"
-    modelfile = f"models/ncrf_effect/{mod}-{subject}.pickle"
+    modelfile = f"models/ncrf/{mod}-{subject}.pickle"
     raw_fif=root/f"{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-{run}_meg.fif"
-    clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_meg_clean.fif"
+    clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_clean_meg.fif"
     fwd_file=fwd_dir / f"{subject}_{session}/{subject}-fwd.fif"
     
     if os.path.exists(modelfile):
@@ -116,7 +123,7 @@ for i in range(1, 31):
                     stim1[idx] = 1.0
                     stim2[idx] = 1.0 if is_anim else -1.0
 
-                elif mod=='unbalanced':
+                elif mod=='ortho':
                     
                     n_a =int(event_table['animate'].sum())
                     n_i =int((~event_table['animate']).sum())
@@ -140,8 +147,11 @@ for i in range(1, 31):
         trans=mne.read_trans(trans_fif)
 
         
-        fwd_file=fwd_dir / f"{subject}_{session}/{subject}-fwd.fif"
-        if fwd_file.exists():
+        
+        fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
+        fwd_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        if fwd_file.exists() and not (rewrite):
             print(" Loading FWD ")
             fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
         else:
@@ -195,35 +205,92 @@ for i in range(1, 31):
 # %%
 cases = []
 for i in range(1, 31):
-    if i == 28:            #corrupted MEGs in all runs
-        continue
+    if (i<10):
+        run="01"
+        session="ImageNet02"
+    elif i==22:
+        run="04"
+        session="ImageNet01" 
+    elif (i==11) or (i==30):
+        run="01"
+        session="ImageNet01"
+    elif i == 28:           
+        continue        
+    else:
+        run="05"
+        session="ImageNet01" 
+    
     subject = f"sub-{i:02d}"
     
-    morphed_file = f"models/ncrf_effect/{mod}-{subject}-morphed.pickle"
+    morphed_file = f"models/ncrf/{mod}-{subject}-morphed.pickle"
     
     if os.path.exists(morphed_file):
-        print(f"Loading {subject} from file.")
+        print(f"Loading {subject} morphed model from file.")
         inanim, anim = load.unpickle(morphed_file)
     else:
                   
         print(f"Morphing {subject}...")
-        model_file = f"models/ncrf_effect/{mod}-{subject}.pickle"
-        model = load.unpickle(model_file)
+        model_file = f"models/ncrf/{mod}-{subject}.pickle"
+        model= load.unpickle(model_file)
         hlist = model.h
         
         if mod=="dummy":
             inanim = hlist[0]
             anim = hlist[1]
         elif mod=="effect":
-            h_mean, h_contrast = hlist[0], hlist[1]
-            anim   = h_mean + h_contrast
-            inanim = h_mean - h_contrast 
-               
-        anim_fs = morph_nd(subject, 'fsaverage2', subjects_dir, anim, 'vol-7')
-        inanim_fs = morph_nd(subject, 'fsaverage2', subjects_dir, inanim, 'vol-7')
+            h_mean,h_contrast = hlist[0],hlist[1]
+            anim = h_mean+ h_contrast
+            inanim = h_mean- h_contrast 
+
+        elif mod=="ortho":
+            h_mean,h_contrast= hlist[0],hlist[1]
+            anim = h_mean+ code_anim* h_contrast
+            inanim = h_mean+ code_inanim* h_contrast
+            
+        #morph  
+        fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
+        fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
+
         
-        anim = anim_fs.smooth('source', 0.01, 'gaussian')
-        inanim = inanim_fs.smooth('source', 0.01, 'gaussian')
+        stc_vec_anim = ndvar_merged_to_stc_lr(
+            
+            ndvar=anim,
+            fwd=fwd,
+            subject=subject,
+            subjects_dir=subjects_dir,
+            src_tag="vol-7",
+        )
+        stc_vec_inanim = ndvar_merged_to_stc_lr(
+            
+            ndvar=inanim,
+            fwd=fwd,
+            subject=subject,
+            subjects_dir=subjects_dir,
+            src_tag="vol-7",
+        )
+        
+        print("     1/2")        
+        an_L_fs, an_R_fs, anim_fs = morph_hemi(
+            stc_vec_anim,
+            subject=subject,
+            subject_to="fsaverage2",
+            subjects_dir=subjects_dir,
+            src_tag="vol-7",
+        )
+        
+        print("     2/2")        
+        _, _, inanim_fs = morph_hemi(
+            stc_vec_inanim,
+            subject=subject,
+            subject_to="fsaverage2",
+            subjects_dir=subjects_dir,
+            src_tag="vol-7",
+        )
+        #anim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, anim, 'vol-7')                    #wholeBran : single grid
+        #inanim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, inanim, 'vol-7')
+        
+        anim= anim_fs.smooth('source', 0.01, 'gaussian')
+        inanim= inanim_fs.smooth('source', 0.01, 'gaussian')
         
         save.pickle((inanim, anim), morphed_file)
     
@@ -231,7 +298,7 @@ for i in range(1, 31):
     cases.append([subject, 'animate', anim])
     
 data = Dataset.from_caselist(['subject', 'animacy', 'ncrf'], cases)
-data.head()
+data.tail()
 
 # %% [markdown]
 # # Group Analysis
@@ -246,16 +313,16 @@ res = testnd.VectorDifferenceRelated(
     match='subject',     
     data=data,     
     tfce=True,           
-    tstart=0.1,
-    tstop=0.7,
+    tstart=10,                           #ms not second, out put of ncrf 
+    tstop=70,
     samples=1000
 )
-save.pickle(res, f"Tests/{mod}-ncrf_paired_test.pickle")
+save.pickle(res, f"Tests/ncrf/{mod}-ncrf_paired_test.pickle")
 
 # %%
 diff= res.masked_difference()
 p = plot.Butterfly(diff.norm('space'), color='k',title='anim VS inanim')
-times = [0.15,0.24,0.3,0.35,0.5,0.6]
+times = [15,21,34,45,50,60]
 for t in times:
     p.add_vline(t)
 for t in times:
@@ -266,11 +333,11 @@ for t in times:
 
 # %%
 data_inan = data.sub("animacy == 'inanimate'")
-result_inan = testnd.Vector('ncrf', match='subject', data=data_inan, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
+result_inan = testnd.Vector('ncrf', match='subject', data=data_inan, tfce=True, tstart=1, tstop=600,samples=1000)
 
 # %%
 p = plot.Butterfly(result_inan.masked_difference().norm('space'), color='k')
-times = [0.13,0.25,0.4]
+times = [13,25,40]
 for t in times:
     p.add_vline(t)
 for t in times:
@@ -278,20 +345,17 @@ for t in times:
 
 # %%
 data_an = data.sub("animacy == 'animate'")
-result_an = testnd.Vector('ncrf', match='subject', data=data_an, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
+result_an = testnd.Vector('ncrf', match='subject', data=data_an, tfce=True, tstart=1, tstop=60,samples=1000)
 result_an
-save.pickle((result_an,result_inan), f"Tests/{mod}-ncrf_1samptest.pickle")
-
-# %%
-save.pickle((result_an,result_inan), f"Tests/ncrf_1samptest.pickle")
+save.pickle((result_an,result_inan), f"Tests/ncrf/{mod}-ncrf_1samptest.pickle")
 
 # %%
 p = plot.Butterfly(result_an.masked_difference().norm('space'), color='k')
-times = [0.13,0.25,0.4]
+times = [13,25,40]
 for t in times:
     p.add_vline(t)
 for t in times:
-    f = plot.GlassBrain(result_an.masked_difference().sub(time=t),title=f"animate, {t}s")  
+    f = plot.GlassBrain(result_an.masked_difference().sub(time=t),title=f"animate, {t}ms")  
 
 # %% [markdown]
 # ## Average
@@ -311,25 +375,5 @@ for t in times:
     f = plot.GlassBrain(diff.sub(time=t),title=f"diff: animate-Inanimate, {t}s") 
 
 # %%
-n_a = int(event_table['animate'].sum())
-n_i = int((~event_table['animate']).sum())
-N   = n_a + n_i
-code_anim, code_inanim = (n_i / N), -(n_a / N)
-
-# %%
-N
-
-
-# %%
-n_i
-
-# %%
-n_i/N
-
-# %%
-n_a/N
-
-# %%
-stim2[times[m]] = np.where(anims[m], code_anim, code_inanim)
 
 # %%
