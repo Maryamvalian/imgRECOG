@@ -26,6 +26,7 @@ from eelbrain import *
 from eelbrain import NDVar
 from eelbrain._data_obj import VolumeSourceSpace
 import os
+from Beyond import morph_hemi          
 
 # %% [markdown]
 # # Create STC ans save model
@@ -34,8 +35,8 @@ import os
 root = Path("~/Data/ds005810")
 subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
 empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-noise_meg.fif"
-
-
+rewrite=True          #force rewrite fwd
+src_type="cortex"      #wholeBrain,cortex
 #Noise
 raw_er = mne.io.read_raw_fif(empty_room, preload=True, verbose=False).pick('meg')
 raw_er.filter(1., 40., phase="zero-double", verbose=False)
@@ -112,9 +113,12 @@ for i in range(1, 31):
 
         evoked_anim   = epochs_an.average()
         evoked_inanim = epochs_in.average()
-    
-    
-        src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"       #************
+
+        if src_type=="wholeBrain":
+            src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
+        elif src_type=="cortex":
+            src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-lr-src.fif"   #not merged LH,RH cortex 
+        
         src = mne.read_source_spaces(str(src_file),verbose=False)
     
         bem_sol_fif=f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
@@ -123,7 +127,7 @@ for i in range(1, 31):
         trans_fif= f"{root}/derivatives/trans/{subject}-{session}-trans.fif"
         trans=mne.read_trans(trans_fif)
     
-        if fwd_file.exists():
+        if fwd_file.exists() and not(rewrite):
             print(" Loading FWD ")
             fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
         else:
@@ -158,48 +162,57 @@ for i in range(1, 31):
         
         
         print(f"   Morphing 1/2")
-        src_fs2 = mne.read_source_spaces(f"{subjects_dir}/fsaverage2/bem/fsaverage2-vol-7-src.fif",verbose=False)
-        src_from=fwd['src'] # <==========When mismatch between src and fwd
-        
-        morph = mne.compute_source_morph(
+        if src_type=="wholeBrain":
+            src_fs2 = mne.read_source_spaces(f"{subjects_dir}/fsaverage2/bem/fsaverage2-vol-7-src.fif",verbose=False)
+            src_from=fwd['src'] # <==========When mismatch between src and fwd
             
-            src=src_from, # <===========
-            subject_from=subject,
-            subject_to="fsaverage2",     
-            subjects_dir=subjects_dir,
-            spacing=7.0, 
-            src_to=src_fs2,                                     
-            precompute=True,
-            verbose=False,
-        )
-        stc_anim_vec_fs = morph.apply(stc_anim_vec)
-        
-        print(f"   Morphing 2/2")
-        morph = mne.compute_source_morph(
-                                
-            src=src_from, # <==============
-            subject_from=subject,
-            subject_to="fsaverage2",     
-            subjects_dir=subjects_dir,
-            spacing=7.0, 
-            src_to=src_fs2,                                    
-            precompute=True,
-            verbose=False,
+            morph = mne.compute_source_morph(
+                
+                src=src_from, # <===========
+                subject_from=subject,
+                subject_to="fsaverage2",     
+                subjects_dir=subjects_dir,
+                spacing=7.0, 
+                src_to=src_fs2,                                     
+                precompute=True,
+                verbose=False,
             )
-        stc_inan_vec_fs = morph.apply(stc_inan_vec)
+            stc_anim_vec_fs = morph.apply(stc_anim_vec)
+                        
+            print(f"   Morphing 2/2")
+            morph = mne.compute_source_morph(
+                                    
+                src=src_from, # <==============
+                subject_from=subject,
+                subject_to="fsaverage2",     
+                subjects_dir=subjects_dir,
+                spacing=7.0, 
+                src_to=src_fs2,                                    
+                precompute=True,
+                verbose=False,
+                )
+            stc_inan_vec_fs = morph.apply(stc_inan_vec)
+            
+            inan = load.mne.stc_ndvar(
+                stc_inan_vec_fs,
+                src='vol-7',                  
+                subjects_dir=subjects_dir,
+                subject='fsaverage2')
+            anim = load.mne.stc_ndvar(
+                stc_anim_vec_fs,
+                src='vol-7',                  
+                subjects_dir=subjects_dir,
+                subject='fsaverage2')
+            
+        elif src_type=="cortex":
+            print("morphing 1/2")
+            R,L,anim = morph_hemi(stc_anim_vec, subject=subject, subject_to="fsaverage2",
+                              subjects_dir=subjects_dir, src_tag="vol-7")
+            print("morphing 2/2")
+            R_in,L_in,inan = morph_hemi(stc_inan_vec, subject=subject, subject_to="fsaverage2",
+                              subjects_dir=subjects_dir, src_tag="vol-7")
         
-        stc_inan_vec_fs_nd = load.mne.stc_ndvar(
-            stc_inan_vec_fs,
-            src='vol-7',                  
-            subjects_dir=subjects_dir,
-            subject='fsaverage2')
-        stc_anim_vec_fs_nd = load.mne.stc_ndvar(
-            stc_anim_vec_fs,
-            src='vol-7',                  
-            subjects_dir=subjects_dir,
-            subject='fsaverage2')
-        
-        save.pickle((stc_inan_vec_fs_nd,stc_anim_vec_fs_nd), modelfile)                 
+        save.pickle((inan,anim), modelfile)                 
         print(f"=====>{subject } done!")
     except Exception as e:
         print(f"Error processing {subject}: {e}")   
@@ -210,7 +223,7 @@ for i in range(1, 31):
 
 # %%
 cases = []
-for i in range(1, 22):
+for i in range(1, 31):
     
     subject = f"sub-{i:02d}"
     modelfile = Path(f"models/mne/{subject}-mne.pickle")    
@@ -243,12 +256,12 @@ res = testnd.VectorDifferenceRelated(
     tstop=0.7,
     samples=1000
 )
-save.pickle(res, "Tests/mne_paired_test.pickle")
+save.pickle(res, "Tests/mne/mne_paired_test.pickle")
 
 # %%
 diff= res.masked_difference()
 p = plot.Butterfly(diff.norm('space'), color='k',title='anim VS inanim')
-times = [0.15,0.24,0.3,0.35,0.5,0.6]
+times = [0.15,0.21,0.34,0.45,0.5,0.6]
 
 for t in times:
     p.add_vline(t)
@@ -266,7 +279,7 @@ result_inan = testnd.Vector('stc', match='subject', data=data_inan, tfce=True, t
 data_an = data.sub("animacy == 'animate'")
 result_an = testnd.Vector('stc', match='subject', data=data_an, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
 
-save.pickle((result_an,result_inan), "Tests/mne_1sampletest.pickle")
+save.pickle((result_an,result_inan), "Tests/mne/mne_1sampletest.pickle")
 
 # %%
 p = plot.Butterfly(result_inan.masked_difference().norm('space'), color='k')
