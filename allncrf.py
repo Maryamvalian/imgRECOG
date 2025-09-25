@@ -31,7 +31,7 @@ from Beyond import ndvar_merged_to_stc_lr
 from Beyond import morph_hemi
 
 # %%
-mod="dummy"  #effect, dummy, ortho (effect with unbalanced trial counts)
+mod="common"  #common, effect, dummy, ortho (effect with unbalanced trial counts)
 rewrite=True
 root = Path("~/Data/ds005810")
 subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
@@ -118,6 +118,10 @@ for i in range(1, 31):
                     else:
                         stim1[idx]= 1.0
                         
+                elif mod=='common':
+                    
+                    stim1[idx] = 1.0
+                    
                 elif mod=='effect':
                     
                     stim1[idx] = 1.0
@@ -174,9 +178,13 @@ for i in range(1, 31):
         print(len(fwd['src'][0]['vertno']))  
 
         print(f"Fitting NCRF")
+        if mod=="common":
+            stim=stim1
+        else:
+            stim=[stim1,stim2]
         args = (
                     meg_ndvar,
-                    [stim1,stim2],
+                    stim,
                     lf,
                     noise_cov,
                     0,
