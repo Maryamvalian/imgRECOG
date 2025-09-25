@@ -15,9 +15,9 @@ from scipy.spatial import cKDTree
 
 def ndvar_merged_to_stc_lr(ndvar, *, fwd, subject, subjects_dir, src_tag="vol-7"):
     
-    tdim= next((d for d in ndvar.dims if getattr(d, 'type', None) == 'time'), None)
-    tmin= float(getattr(tdim, 'tmin', 0.0))
-    tstep= float(getattr(tdim, 'tstep', 1.0))
+    tdim=next((d for d in ndvar.dims if getattr(d, 'type', None) == 'time'), None)
+    tmin=float(getattr(tdim, 'tmin', 0.0))
+    tstep=float(getattr(tdim, 'tstep', 1.0))
 
     # merged forward src 
     src_merged= fwd['src']; assert len(src_merged) == 1
@@ -100,7 +100,7 @@ def GlassBrainVideo(tmin, tmax, dt, nd, vname):
 
     tmin= max(tmin, float(nd.time.tmin))      
     tmax = min(float(nd.time.tmax),tmax)     
-    dt= min(dt, 0.1)                               
+    #dt= min(dt, 0.1)                               
     times =np.arange(tmin, tmax + 1e-12, dt)
 
     dpi = 100           #image quality
