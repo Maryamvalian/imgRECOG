@@ -333,9 +333,7 @@ for t in times:
 # # COMMON RESPONSE
 
 # %%
-mod
-
-# %%
+mod=="common"
 cases = []
 for i in range(1, 31):
     
