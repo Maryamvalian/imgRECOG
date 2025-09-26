@@ -100,7 +100,7 @@ def GlassBrainVideo(tmin, tmax, dt, nd, vname):
 
     tmin= max(tmin, float(nd.time.tmin))      
     tmax = min(float(nd.time.tmax),tmax)     
-    #dt= min(dt, 0.1)                               
+                                   
     times =np.arange(tmin, tmax + 1e-12, dt)
 
     dpi = 100           #image quality
