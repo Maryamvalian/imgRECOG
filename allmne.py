@@ -42,7 +42,10 @@ raw_er = mne.io.read_raw_fif(empty_room, preload=True, verbose=False).pick('meg'
 raw_er.filter(1., 40., phase="zero-double", verbose=False)
 raw_er.resample(100, npad="auto", verbose=False)
 noise_cov = mne.compute_raw_covariance(raw_er, method='shrunk', rank=None,verbose=False)
+mod="common"
 
+# %% [markdown]
+# Only for subject 3 the stim_is_animate is defined as sting - use "True" instead of True.
 
 # %%
 root_epochs = Path("/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/epochs")
@@ -69,7 +72,7 @@ for i in range(1, 31):
     clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_clean_meg.fif"
     fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
     fwd_file.parent.mkdir(parents=True, exist_ok=True)
-    modelfile = f"models/mne/{subject}-mne.pickle"
+    modelfile = f"models/mne/{mod}-{subject}-mne.pickle"
 
     if os.path.exists(modelfile):
         print(f"{subject} loaded from file.")
@@ -102,17 +105,27 @@ for i in range(1, 31):
     
     
         mask_an = (
-            (meta["subject"] == i) &
-            (meta["session"] == session) &
-            (meta["run"] == int(run))&
+            (meta["subject"]== i) &
+            (meta["session"]== session) &
+            (meta["run"]== int(run))&
             (meta["stim_is_animate"] ==True)
         )
     
         epochs_an = epochs_resamp[mask_an]
         print(f"#Animate={len(epochs_an)}")
 
-        evoked_anim   = epochs_an.average()
+        mask_common = (
+            (meta["subject"] == i) &
+            (meta["session"] == session) &
+            (meta["run"] == int(run))
+            
+        )
+    
+        epochs_common = epochs_resamp[mask_an]
+
+        evoked_anim= epochs_an.average()
         evoked_inanim = epochs_in.average()
+        evoked_common= epochs_common.average()
 
         if src_type=="wholeBrain":
             src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
@@ -128,16 +141,16 @@ for i in range(1, 31):
         trans=mne.read_trans(trans_fif)
     
         if fwd_file.exists() and not(rewrite):
-            print(" Loading FWD ")
+            print("    Loading FWD ")
             fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
         else:
-            print(" Computing FWD...")
+            print("   Computing FWD...")
             fwd = mne.make_forward_solution(
                 clean.info, trans, src, bem_sol,
                 meg=True, eeg=False, mindist=0, verbose=False
             )
             mne.write_forward_solution(str(fwd_file), fwd, overwrite=True, verbose=False)
-            print(f"   Saved FWD to {fwd_file}")
+            print(f"      Saved FWD to {fwd_file}")
         
         print("   Inverse...")
         inv = mne.minimum_norm.make_inverse_operator(
@@ -159,9 +172,12 @@ for i in range(1, 31):
         
         stc_inan_vec = mne.minimum_norm.apply_inverse(
             evoked_inanim, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False)
+
+        stc_common_vec = mne.minimum_norm.apply_inverse(
+            evoked_common, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False)
         
         
-        print(f"   Morphing 1/2")
+        print(f"Morphing ...")
         if src_type=="wholeBrain":
             src_fs2 = mne.read_source_spaces(f"{subjects_dir}/fsaverage2/bem/fsaverage2-vol-7-src.fif",verbose=False)
             src_from=fwd['src'] # <==========When mismatch between src and fwd
@@ -180,6 +196,8 @@ for i in range(1, 31):
             stc_anim_vec_fs = morph.apply(stc_anim_vec)
                         
             print(f"   Morphing 2/2")
+            #we already computed morph?!
+            """
             morph = mne.compute_source_morph(
                                     
                 src=src_from, # <==============
@@ -191,6 +209,7 @@ for i in range(1, 31):
                 precompute=True,
                 verbose=False,
                 )
+            """    
             stc_inan_vec_fs = morph.apply(stc_inan_vec)
             
             inan = load.mne.stc_ndvar(
@@ -205,14 +224,28 @@ for i in range(1, 31):
                 subject='fsaverage2')
             
         elif src_type=="cortex":
-            print("morphing 1/2")
-            R,L,anim = morph_hemi(stc_anim_vec, subject=subject, subject_to="fsaverage2",
+            """
+            
+            
+            """
+            if mod=="common":
+                
+                print("    morphing 1/1")
+                R,L,common = morph_hemi(stc_common_vec, subject=subject, subject_to="fsaverage2",
+                                  subjects_dir=subjects_dir, src_tag="vol-7")
+                save.pickle(common, modelfile)
+            else:
+                
+                print("   morphing 1/2")
+                R,L,anim = morph_hemi(stc_anim_vec, subject=subject, subject_to="fsaverage2",
                               subjects_dir=subjects_dir, src_tag="vol-7")
-            print("morphing 2/2")
-            R_in,L_in,inan = morph_hemi(stc_inan_vec, subject=subject, subject_to="fsaverage2",
+                print("   morphing 2/2")
+                R_in,L_in,inan = morph_hemi(stc_inan_vec, subject=subject, subject_to="fsaverage2",
                               subjects_dir=subjects_dir, src_tag="vol-7")
+                save.pickle((inan,anim), modelfile)
+                  
         
-        save.pickle((inan,anim), modelfile)                 
+                         
         print(f"=====>{subject } done!")
     except Exception as e:
         print(f"Error processing {subject}: {e}")   
@@ -238,7 +271,7 @@ for i in range(1, 31):
         print(f"{subject} Skipped")
     
 data = Dataset.from_caselist(['subject', 'animacy', 'stc'], cases)
-data.head()
+data.tail()
 
 # %% [markdown]
 # ## Paired Test
@@ -296,10 +329,41 @@ for t in times:
 for t in times:
     f = plot.GlassBrain(result_an.masked_difference().sub(time=t),title=f"animate, {t}s")     
 
-# %%
+# %% [markdown]
+# # COMMON RESPONSE
 
 # %%
+mod
 
 # %%
+cases = []
+for i in range(1, 31):
+    
+    subject = f"sub-{i:02d}"
+    modelfile = Path(f"models/mne/{mod}-{subject}-mne.pickle")    
+
+    if modelfile.exists():       
+    
+        common = load.unpickle(modelfile)    
+        
+       
+        cases.append([subject, common])
+    else:
+        print(f"{subject} Skipped")
+    
+data_common= Dataset.from_caselist(['subject', 'stc'], cases)
+data_common.head()
+
+# %%
+result_common = testnd.Vector('stc', match='subject', data=data_common, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
+
+
+# %%
+p = plot.Butterfly(result_common.masked_difference().norm('space'), color='k')
+times = [0.13,0.25,0.35,0.45]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(result_common.masked_difference().sub(time=t),title=f"common MNE, {t}s") 
 
 # %%
