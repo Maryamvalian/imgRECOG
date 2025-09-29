@@ -31,7 +31,7 @@ from Beyond import ndvar_merged_to_stc_lr
 from Beyond import morph_hemi
 
 # %%
-mod="common"  #common, effect, dummy, ortho (effect with unbalanced trial counts)
+mod="dummy"  #common, effect, dummy, ortho (effect with unbalanced trial counts)
 rewrite=True
 root = Path("~/Data/ds005810")
 subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
@@ -222,8 +222,9 @@ for i in range(1, 31):
     elif (i==11) or (i==30):
         run="01"
         session="ImageNet01"
-    elif i == 28:           
-        continue        
+    elif i==28:
+        continue
+        
     else:
         run="05"
         session="ImageNet01" 
@@ -233,7 +234,7 @@ for i in range(1, 31):
     morphed_file = f"models/ncrf/{mod}-{subject}-morphed.pickle"
     
     if os.path.exists(morphed_file):
-        print(f"Loading {subject} morphed model from file.")
+        print(f"Loading {subject} from file.")
         inanim, anim = load.unpickle(morphed_file)
     else:
                   
@@ -382,6 +383,96 @@ for t in times:
 for t in times:
     f = plot.GlassBrain(diff.sub(time=t),title=f"diff: animate-Inanimate, {t}s") 
 
+# %% [markdown]
+# # COMMON GROUP analysis
+
 # %%
+mod="common"
+
+# %%
+cases = []
+for i in range(1, 31):
+    if (i<10):
+        run="01"
+        session="ImageNet02"
+    elif i==22:
+        run="04"
+        session="ImageNet01" 
+    elif (i==11) or (i==30):
+        run="01"
+        session="ImageNet01"
+    elif i == 28:           
+        continue        
+    else:
+        run="05"
+        session="ImageNet01" 
+    
+    subject = f"sub-{i:02d}"
+    
+    morphed_file = f"models/ncrf/{mod}-{subject}-morphed.pickle"
+    
+    if os.path.exists(morphed_file):
+        print(f"Loading {subject} morphed model from file.")
+        common = load.unpickle(morphed_file)
+    else:
+                  
+        print(f"Morphing {subject}...")
+        model_file = f"models/ncrf/{mod}-{subject}.pickle"
+        model= load.unpickle(model_file)
+        hlist = model.h
+        
+        root = Path("~/Data/ds005810")
+        clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_clean_meg.fif"
+        clean = mne.io.read_raw_fif(clean_fif, preload=True,verbose=False)
+        
+        src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif" #merged
+        src = mne.read_source_spaces(str(src_file),verbose=False)
+        
+        bem_sol_fif=f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
+        bem_sol = mne.read_bem_solution(bem_sol_fif,verbose=False)
+        
+        
+        trans_fif= f"{root}/derivatives/trans/{subject}-{session}-trans.fif"
+        trans=mne.read_trans(trans_fif)
+        
+        fwd = mne.make_forward_solution(
+                clean.info, trans, src, bem_sol,
+                meg=True, eeg=False, mindist=0, verbose=False
+            )
+
+        
+        stc_common = ndvar_merged_to_stc_lr(
+        
+        ndvar=hlist,
+        fwd=fwd,
+        subject=subject,
+        subjects_dir=subjects_dir,
+        src_tag="vol-7")
+
+        _, _, common_fs = morph_hemi(
+        stc_common,
+        subject=subject,
+        subject_to="fsaverage2",
+        subjects_dir=subjects_dir,
+        src_tag="vol-7")
+
+        common= common_fs.smooth('source', 0.01, 'gaussian')
+        save.pickle(common, morphed_file)
+        
+    cases.append([subject, common])
+
+data_common = Dataset.from_caselist(['subject', 'ncrf'], cases)
+data_common.tail()        
+
+# %%
+result_common = testnd.Vector('ncrf', match='subject', data=data_common, tfce=True, tstart=10, tstop=60,samples=1000)  #NCRF time
+
+# %%
+p = plot.Butterfly(result_common.masked_difference().norm('space'), color='k')
+times = [13,25,35,45]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(result_common.masked_difference().sub(time=t),title=f"common NCRF, {t/100}s") 
 
 # %%
