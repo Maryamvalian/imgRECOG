@@ -9,6 +9,7 @@ from eelbrain import NDVar,load
 from eelbrain._data_obj import VolumeSourceSpace
 #from scipy.sparse import block_diag, csr_matrix
 from scipy.spatial import cKDTree
+import pandas as pd
 
 
 
