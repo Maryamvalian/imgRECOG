@@ -280,7 +280,7 @@ def morph_hemi(stc_vec, subject, subject_to="fsaverage2", *, subjects_dir, src_t
     
  #------------------------------------------------------
 
-    def make_event_table(subject, session, run, *, root="/Users/maryamvalian/Data/ds005810",
+def make_event_table(subject, session, run, *, root="/Users/maryamvalian/Data/ds005810",
                      stim_channel="UPPT001", stim_id=2,                # ID for 'stim_on' in RAW events
                      detailed_events_dir=None  # default: <root>/derivatives/detailed_events
                      ):
