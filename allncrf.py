@@ -32,7 +32,7 @@ mod="dummy"  #common, effect, dummy, ortho (effect with unbalanced trial counts)
 rewrite=True
 root = Path("~/Data/ds005810")
 subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
-#fwd_dir=Path("/Users/maryamvalian/Data/ds005810/derivatives/eelbrain/cache/raw")
+fwd_dir=Path("/Users/maryamvalian/Data/ds005810/derivatives/eelbrain/cache/raw")
 
 
 # %% [markdown]
@@ -65,16 +65,18 @@ def compute_fwd_ndvar(subject, session,subject_dir,meg_info,sensor):
 
     fwd = mne.make_forward_solution(meg_info, trans, src, bem_sol,
                                     meg=True, eeg=False, mindist=0, verbose=False)
-    #mne.write_forward_solution(str(fwd_file), fwd, overwrite=True, verbose=False)
-    #print(f"   Saved FWD to {fwd_file}")
+    fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
+    fwd_file.parent.mkdir(parents=True, exist_ok=True)
+    mne.write_forward_solution(str(fwd_file), fwd, overwrite=True, verbose=False)
+    print(f"   Saved FWD to {fwd_file}")
 
         
     #convert to ndvar
     lf = load.mne.forward_operator(fwd,src='vol-7',subjects_dir=subjects_dir,
                                    adjacency=False,parc='aparc+aseg') 
     lf  = lf.sub(sensor=sensor)  
-    print(len(src[0]['vertno']))           #check sanity
-    print(len(fwd['src'][0]['vertno']))  
+    #print(len(src[0]['vertno']))           #check sanity
+    #print(len(fwd['src'][0]['vertno']))  
 
 
     return lf
@@ -141,10 +143,12 @@ def make_predictors_for_run(meg_ndvar, event_table,mod):
 
 
 # %% [markdown]
-# Fitting NCRF Models:
+# # Fitting NCRF Models:
+# <hr><br><br>
+# <bold>All Sessions and Runs</bold> 
 
 # %%
-for i in range(10, 31):                                      
+for i in range(9, 10):                                      
     if (i>9):
         sessions=["ImageNet01"]
         lastruns = [5]                     #run01,run02,..,run05   
@@ -170,7 +174,7 @@ for i in range(10, 31):
             sensor=meg_ndvar.sensor
             fwd = compute_fwd_ndvar(subject, session,subjects_dir,info,sensor)
 
-
+            
             lastrun= lastruns[idx]
             runs = [f"{i:02d}" for i in range(1, lastrun+1)] 
             meg_all = []
@@ -196,17 +200,17 @@ for i in range(10, 31):
          print(f"Error processing {subject}: {e}")   
 
 # %%
-
-# %%
-
-# %%
-
-# %%
-print(Maryam)
+subject="sub-11"
+session="ImageNet01"
+clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
+clean = mne.io.read_raw_fif(clean_fif, preload=False,verbose=False)
+info= clean.info           
+meg_ndvar = load.fiff.raw_ndvar(clean)
+sensor=meg_ndvar.sensor
+fwd = compute_fwd_ndvar(subject, session,subjects_dir,info,sensor)
 
 # %% [markdown]
-# # Creat Models
-# <hr><br><br>
+#
 #
 # WB works well <br>
 # Cortex -> src should be merged! otherwise can not convert fwd to ndvar to feed fit_ncef<br>
@@ -215,6 +219,7 @@ print(Maryam)
 # **when change src type (cortex, merged, WB,..) make sure fwd is overwrited**<br>
 
 # %%
+"""
 raw_er = mne.io.read_raw_fif(empty_room, preload=True, verbose=False).pick('meg')
 raw_er.filter(1., 40., phase="zero-double", verbose=False)
 raw_er.resample(100, npad="auto", verbose=False)
@@ -372,97 +377,89 @@ for i in range(1, 31):
         
     except Exception as e:
          print(f"Error processing {subject}: {e}")                 
-
+"""
 
 # %% [markdown]
 # # Morph and save
+# <hr><br><br>
+#
 # ## Dataset from cases
 
 # %%
 cases = []
-for i in range(1, 31):
-    if (i<10):
-        run="01"
-        session="ImageNet02"
-    elif i==22:
-        run="04"
-        session="ImageNet01" 
-    elif (i==11) or (i==30):
-        run="01"
-        session="ImageNet01"
-    elif i==28:
-        continue
-        
+for i in range(10, 12):                                      
+    if (i>9):
+        sessions=["ImageNet01"]
+        lastruns = [5]                     #run01,run02,..,run05   
     else:
-        run="05"
-        session="ImageNet01" 
+        sessions=["ImageNet01", "ImageNet02","ImageNet03","ImageNet04"]
+        lastruns=[2,2,8,8]
     
     subject = f"sub-{i:02d}"
+    for idx, session in enumerate(sessions):
+                
+        morphed_file = f"models/all_runs/{subject}-{session}-ncrf-morphed.pickle"
+        if os.path.exists(morphed_file):
+            print(f"Loading {subject} from file.")
+            inanim, anim = load.unpickle(morphed_file)
+        else:
+            print(f"Morphing {subject}...")
+            modelfile = f"models/all_runs/{subject}-{session}-ncrf.pickle"
+            model= load.unpickle(modelfile)
+            hlist = model.h
+            
+            if mod=="dummy":
+                inanim = hlist[0]
+                anim = hlist[1]
+            elif mod=="effect":
+                h_mean,h_contrast = hlist[0],hlist[1]
+                anim = h_mean+ h_contrast
+                inanim = h_mean- h_contrast 
     
-    morphed_file = f"models/ncrf/{mod}-{subject}-morphed.pickle"
-    
-    if os.path.exists(morphed_file):
-        print(f"Loading {subject} from file.")
-        inanim, anim = load.unpickle(morphed_file)
-    else:
-                  
-        print(f"Morphing {subject}...")
-        model_file = f"models/ncrf/{mod}-{subject}.pickle"
-        model= load.unpickle(model_file)
-        hlist = model.h
-        
-        if mod=="dummy":
-            inanim = hlist[0]
-            anim = hlist[1]
-        elif mod=="effect":
-            h_mean,h_contrast = hlist[0],hlist[1]
-            anim = h_mean+ h_contrast
-            inanim = h_mean- h_contrast 
-
-        elif mod=="ortho":
-            h_mean,h_contrast= hlist[0],hlist[1]
-            anim = h_mean+ code_anim* h_contrast
-            inanim = h_mean+ code_inanim* h_contrast
+            elif mod=="ortho":
+                h_mean,h_contrast= hlist[0],hlist[1]
+                anim = h_mean+ code_anim* h_contrast
+                inanim = h_mean+ code_inanim* h_contrast
             
-        #morph  
-        fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
-        fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
+            #morph  
+            fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
+            fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
 
         
-        stc_vec_anim = ndvar_merged_to_stc_lr(
-            
-            ndvar=anim,
-            fwd=fwd,
-            subject=subject,
-            subjects_dir=subjects_dir,
-            src_tag="vol-7",
-        )
-        stc_vec_inanim = ndvar_merged_to_stc_lr(
-            
-            ndvar=inanim,
-            fwd=fwd,
-            subject=subject,
-            subjects_dir=subjects_dir,
-            src_tag="vol-7",
-        )
+            stc_vec_anim = ndvar_merged_to_stc_lr(
+                
+                ndvar=anim,
+                fwd=fwd,
+                subject=subject,
+                subjects_dir=subjects_dir,
+                src_tag="vol-7",
+            )
+            stc_vec_inanim = ndvar_merged_to_stc_lr(
+                
+                ndvar=inanim,
+                fwd=fwd,
+                subject=subject,
+                subjects_dir=subjects_dir,
+                src_tag="vol-7",
+            )
         
-        print("     1/2")        
-        an_L_fs, an_R_fs, anim_fs = morph_hemi(
-            stc_vec_anim,
-            subject=subject,
-            subject_to="fsaverage2",
-            subjects_dir=subjects_dir,
-            src_tag="vol-7",
-        )
-        
-        print("     2/2")        
-        _, _, inanim_fs = morph_hemi(
-            stc_vec_inanim,
-            subject=subject,
-            subject_to="fsaverage2",
-            subjects_dir=subjects_dir,
-            src_tag="vol-7",
-        )
+            print("     1/2")        
+            an_L_fs, an_R_fs, anim_fs = morph_hemi(
+                stc_vec_anim,
+                subject=subject,
+                subject_to="fsaverage2",
+                subjects_dir=subjects_dir,
+                src_tag="vol-7",
+            )
+            
+            print("     2/2")        
+            _, _, inanim_fs = morph_hemi(
+                stc_vec_inanim,
+                subject=subject,
+                subject_to="fsaverage2",
+                subjects_dir=subjects_dir,
+                src_tag="vol-7",
+            )
         #anim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, anim, 'vol-7')                    #wholeBran : single grid
         #inanim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, inanim, 'vol-7')
         
@@ -470,12 +467,13 @@ for i in range(1, 31):
         inanim= inanim_fs.smooth('source', 0.01, 'gaussian')
         
         save.pickle((inanim, anim), morphed_file)
+        print(f"{subject}-{session}-Morphed Saved  ")
     
-    cases.append([subject, 'inanimate', inanim])
-    cases.append([subject, 'animate', anim])
+    cases.append([subject, session, 'inanimate', inanim])
+    cases.append([subject, session, 'animate', anim])
     
-data = Dataset.from_caselist(['subject', 'animacy', 'ncrf'], cases)
-data.tail()
+data = Dataset.from_caselist(['subject', 'session', 'animacy', 'ncrf'], cases)
+data.head()
 
 # %% [markdown]
 # # Group Analysis
