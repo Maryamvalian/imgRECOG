@@ -278,4 +278,65 @@ def morph_hemi(stc_vec, subject, subject_to="fsaverage2", *, subjects_dir, src_t
 
     return an_R_fs, an_L_fs, an_both
     
+ #------------------------------------------------------
+
+    def make_event_table(subject, session, run, *, root="/Users/maryamvalian/Data/ds005810",
+                     stim_channel="UPPT001", stim_id=2,                # ID for 'stim_on' in RAW events
+                     detailed_events_dir=None  # default: <root>/derivatives/detailed_events
+                     ):
     
+    root = Path(root)
+    subject = str(subject)
+    run_str = f"{int(run):02d}"
+    bids_meg_dir = root / subject / f"ses-{session}" / "meg"
+    events_tsv = bids_meg_dir / f"{subject}_ses-{session}_task-ImageNet_run-{run_str}_events.tsv"
+    raw_fif    = bids_meg_dir / f"{subject}_ses-{session}_task-ImageNet_run-{run_str}_meg.fif"
+
+    if detailed_events_dir is None:
+        detailed_events_dir = root / "derivatives" / "detailed_events"
+    detailed_csv = Path(detailed_events_dir) / f"{subject}_events.csv"
+
+    # animate flags sre in detailed events CSV 
+    
+    meta = pd.read_csv(detailed_csv)
+    meta_sub = meta[(meta["session"] == session) & (meta["run"] == int(run))].reset_index(drop=True)
+    if "stim_is_animate" not in meta_sub.columns:
+        raise RuntimeError("Missing 'stim_is_animate' in detailed events CSV.")
+    anim_flags = meta_sub["stim_is_animate"].astype(str).str.lower().isin(["true", "1", "t", "yes"]).to_numpy()
+
+    #  BIDS events.tsv for exact onsets 
+    stim_times = None
+    try:
+        ev = pd.read_csv(events_tsv, sep="\t")
+        if "onset" not in ev.columns:
+            raise ValueError("events.tsv has no 'onset' column")
+
+        
+        if "trial_type" in ev.columns:
+            mask = ev["trial_type"].astype(str).str.lower().isin(["stim_on", "stim"])
+        elif "value" in ev.columns:
+            mask = ev["value"].astype(str).isin([str(stim_id), f"{stim_id:02d}", "stim_on"])
+        else:
+            mask = pd.Series(True, index=ev.index)  # fallback: take all rows
+
+        stim_times = ev.loc[mask, "onset"].to_numpy(dtype=float)
+    except Exception:
+        
+        raw = mne.io.read_raw_fif(str(raw_fif), preload=False, verbose="error")
+        events = mne.find_events(raw, stim_channel=stim_channel, verbose="error")
+        stim = events[events[:, 2] == stim_id]
+        stim_times = stim[:, 0] / float(raw.info["sfreq"])
+
+    
+    n = min(len(stim_times), len(anim_flags))
+    if len(stim_times) != len(anim_flags):
+        print(f"WARNING [{subject} {session} run {run_str}]: "
+              f"times={len(stim_times)} vs animate={len(anim_flags)} → truncating to {n}")
+
+    event_table = pd.DataFrame({
+        "time": np.asarray(stim_times[:n], dtype=float),
+        "animate": np.asarray(anim_flags[:n], dtype=bool),
+    }).reset_index(drop=True)
+
+    return event_table
+
