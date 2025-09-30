@@ -199,6 +199,9 @@ for i in range(9, 10):
         except Exception as e:
          print(f"Error processing {subject}: {e}")   
 
+# %% [markdown]
+# If fwd file not founded during morphing:
+
 # %%
 subject="sub-11"
 session="ImageNet01"
@@ -474,6 +477,14 @@ for i in range(10, 12):
     
 data = Dataset.from_caselist(['subject', 'session', 'animacy', 'ncrf'], cases)
 data.head()
+
+# %% [markdown]
+# ## Average sessions for sub<10
+
+# %%
+data_avg=data
+data_avg=data_avg.aggregate('subject', drop_bad=True)
+data_avg.tail()
 
 # %% [markdown]
 # # Group Analysis
