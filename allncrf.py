@@ -15,9 +15,9 @@
 # %%
 import mne
 import pandas as pd
-from mne import *
-from ncrf import fit_ncrf
 import numpy as np
+#from mne import *
+from ncrf import fit_ncrf
 from eelbrain import NDVar, UTS
 from eelbrain import plot, combine
 from eelbrain import *
@@ -163,9 +163,8 @@ for i in range(10, 31):
             
             print(f"computing fwd for {subject}-{session}... ")
             
-            run="01"
-            clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_clean_meg.fif"
-            clean = mne.io.read_raw_fif(clean_fif, preload=True,verbose=False)
+            clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
+            clean = mne.io.read_raw_fif(clean_fif, preload=False,verbose=False)
             info= clean.info           
             meg_ndvar = load.fiff.raw_ndvar(clean)
             sensor=meg_ndvar.sensor
