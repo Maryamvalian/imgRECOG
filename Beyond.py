@@ -18,7 +18,7 @@ def ndvar_merged_to_stc_lr(ndvar, *, fwd, subject, subjects_dir, src_tag="vol-7"
     
     tdim=next((d for d in ndvar.dims if getattr(d, 'type', None) == 'time'), None)
     tmin=float(getattr(tdim, 'tmin', 0.0))
-    tstep=float(getattr(tdim, 'tstep', 1.0))
+    tstep=float(getattr(tdim, 'tstep', 10.0))                    #to ms
 
     # merged forward src 
     src_merged= fwd['src']; assert len(src_merged) == 1
