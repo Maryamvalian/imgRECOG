@@ -183,16 +183,17 @@ mne coreg --subject sub-02 --subjects-dir /Users/maryamvalian/Data/ds005810/deri
 # # COREG Code (only fiducials with gui) then run this code
 
 # %%
+from pathlib import Path
 session="ImageNet03"
 root = Path("~/Data/ds005810")
 subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
 
 
-for i in range(6,7 ):
+for i in range(7,10 ):
     
     subject = f"sub-{i:02d}"
-
-    raw_fif=f"/Users/maryamvalian/Data/ds005810/{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-08_meg.fif"
+    raw_fif=f"/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-06_clean_meg.fif"
+    #raw_fif=f"/Users/maryamvalian/Data/ds005810/{subject}/ses-{session}/meg/{subject}_ses-{session}_task-ImageNet_run-01_meg.fif"
     info = mne.io.read_info(raw_fif) 
     
     coreg = mne.coreg.Coregistration( subject=subject,info=info, subjects_dir=subjects_dir)
@@ -273,10 +274,41 @@ for i in range(1, 31):
 # %%
 # Keep ONLY cortex 
 from eelbrain.mne_fixes._source_space import merge_volume_source_space, prune_volume_source_space
+subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
+
+for i in range(2, 31):
+    
+    subject = f"sub-{i:02d}"
+    aseg= os.path.join(subjects_dir, subject, "mri", "aseg.mgz")
+    bem= os.path.join(subjects_dir, subject, "bem", f"{subject}-bem-sol.fif")
+    cortex_labels = ["Left-Cerebral-Cortex", "Right-Cerebral-Cortex"]
+    
+    src_lr = mne.setup_volume_source_space(
+        subject=subject,
+        subjects_dir=subjects_dir,
+        mri=aseg,
+        bem=bem,  
+        volume_label=cortex_labels,   
+        pos=7.0,                      
+        verbose=False,
+    )
+    src_mrg= merge_volume_source_space(src_lr, "cortex")
+    src =prune_volume_source_space(src_mrg, 7, 3, remove_midline=True,fill_holes=4)     #vol-7,nc=3
+    
+    out= f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
+    mne.write_source_spaces(out, src,overwrite=True)
+
+# %% [markdown]
+# # create src LR not merged!!!!
+
+# %%
+# Force LH,RH but merged
+
+#from eelbrain.mne_fixes._source_space import merge_volume_source_space, prune_volume_source_space
 
 subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
-subject = "sub-01"
-for i in range(2, 31):
+
+for i in range(1, 31):     ##subject range
     
     subject = f"sub-{i:02d}"
     
@@ -293,14 +325,17 @@ for i in range(2, 31):
         pos=7.0,                      
         verbose=False,
     )
-    src_mrg = merge_volume_source_space(src_lr, "cortex")
-    src = prune_volume_source_space(src_mrg, 7, 3, remove_midline=True, fill_holes=4)     #int(7): vol-7
+   # src_mrg = merge_volume_source_space(src_lr, "cortex")
+   # src = prune_volume_source_space(src_mrg, 7, 3, remove_midline=True, fill_holes=4)     #int(7): vol-7
     
-    out = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
-    mne.write_source_spaces(out, src,overwrite=True)
+    out = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-lr-src.fif"    #not merged
+    mne.write_source_spaces(out, src_lr,overwrite=True)
+    print(f"{out} saved. ")
 
 # %% [markdown]
 # # Create SRC : force RH,LH but MERGED !!!
+
+# %%
 
 # %%
 # Force LH,RH but merged
@@ -309,7 +344,7 @@ from eelbrain.mne_fixes._source_space import merge_volume_source_space, prune_vo
 
 subjects_dir = "/Users/maryamvalian/Data/ds005810/derivatives/freesurfer/subjects"
 
-for i in range(8, 9):   #=================================Choose subject
+for i in range(1, 31):   #=================================Choose subject
     
     subject = f"sub-{i:02d}"
     
@@ -331,6 +366,7 @@ for i in range(8, 9):   #=================================Choose subject
     
     out = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
     mne.write_source_spaces(out, src_mrg,overwrite=True)
+    print(f"{out} saved. ")
 
 # %% [markdown]
 # # Create (vol-7-R) & (vol-7-L)
@@ -340,27 +376,33 @@ subject="sub-08"
 
 # %%
 # Build single-hemi volume srcs (each returns a proper SourceSpaces)
-src_L = mne.setup_volume_source_space(
-    subject=subject, subjects_dir=subjects_dir,
-    mri=os.path.join(subjects_dir, subject, "mri", "aseg.mgz"),
-    bem=os.path.join(subjects_dir, subject, "bem", f"{subject}-bem-sol.fif"),
-    volume_label=["Left-Cerebral-Cortex"],
-    pos=7.0, verbose=False
-)
-src_R = mne.setup_volume_source_space(
-    subject=subject, subjects_dir=subjects_dir,
-    mri=os.path.join(subjects_dir, subject, "mri", "aseg.mgz"),
-    bem=os.path.join(subjects_dir, subject, "bem", f"{subject}-bem-sol.fif"),
-    volume_label=["Right-Cerebral-Cortex"],
-    pos=7.0, verbose=False
-)
+for i in range(1, 31):   #=================================Choose subject
+    
+    subject = f"sub-{i:02d}"
+    
+    src_L = mne.setup_volume_source_space(
+        subject=subject, subjects_dir=subjects_dir,
+        mri=os.path.join(subjects_dir, subject, "mri", "aseg.mgz"),
+        bem=os.path.join(subjects_dir, subject, "bem", f"{subject}-bem-sol.fif"),
+        volume_label=["Left-Cerebral-Cortex"],
+        pos=7.0, verbose=False
+    )
+    src_R = mne.setup_volume_source_space(
+        subject=subject, subjects_dir=subjects_dir,
+        mri=os.path.join(subjects_dir, subject, "mri", "aseg.mgz"),
+        bem=os.path.join(subjects_dir, subject, "bem", f"{subject}-bem-sol.fif"),
+        volume_label=["Right-Cerebral-Cortex"],
+        pos=7.0, verbose=False
+    )
 
-# Write files with names Eelbrain expects (…-{src}-src.fif)
-mne.write_source_spaces(f"{subjects_dir}/{subject}/bem/{subject}-vol-7-L-src.fif",
-                        src_L, overwrite=True)
-mne.write_source_spaces(f"{subjects_dir}/{subject}/bem/{subject}-vol-7-R-src.fif",
-                        src_R, overwrite=True)
-src_R,src_L
+
+    mne.write_source_spaces(f"{subjects_dir}/{subject}/bem/{subject}-vol-7-L-src.fif",
+                            src_L, overwrite=True)
+    mne.write_source_spaces(f"{subjects_dir}/{subject}/bem/{subject}-vol-7-R-src.fif",
+                            src_R, overwrite=True)
+    print(f"{subject} vol-7-L  and vol-7-R src files saved.")
+    
+
 
 # %% [markdown]
 # ### 5. Biuld FWD
