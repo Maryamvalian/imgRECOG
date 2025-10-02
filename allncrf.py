@@ -148,10 +148,11 @@ def make_predictors_for_run(meg_ndvar, event_table,mod):
 # <bold>All Sessions and Runs</bold> 
 
 # %%
-for i in range(9, 10):                                      
+for i in range(1, 31):                                      
     if (i>9):
         sessions=["ImageNet01"]
-        lastruns = [5]                     #run01,run02,..,run05   
+        lastruns = [5]                     #run01,run02,..,run05      
+        
     else:
         sessions=["ImageNet01", "ImageNet02","ImageNet03","ImageNet04"]
         lastruns=[2,2,8,8]
@@ -161,7 +162,7 @@ for i in range(9, 10):
                 
         modelfile = f"models/all_runs/{subject}-{session}-ncrf.pickle"
         if os.path.exists(modelfile):
-            print(f"{subject} model file exists.")
+            print(f"{subject}-{session} model file exists.")
             continue
         try:
             
@@ -176,6 +177,8 @@ for i in range(9, 10):
 
             
             lastrun= lastruns[idx]
+            if (i==4) and ((session=="ImageNet04")):   #check: make_event :raw file doesnt provided by openneuro
+                lastrun=5
             runs = [f"{i:02d}" for i in range(1, lastrun+1)] 
             meg_all = []
             stim_all = []
@@ -194,12 +197,13 @@ for i in range(9, 10):
                       'verbose': True,'n_iter': 10,'n_iterc': 10,'n_iterf': 100}        
             model = fit_ncrf(*args, **kwargs)  
             save.pickle(model, modelfile)
-            print(f" ...  Model saved to {modelfile}")  
+            print(f"\n {subject} Model saved to {modelfile}\n")  
             
         except Exception as e:
-         print(f"Error processing {subject}: {e}")   
+         print(f"\n----------- Error processing {subject}: {e}\n")   
 
 # %% [markdown]
+# # FWD COMP SEPERATE:
 # If fwd file not founded during morphing:
 
 # %%
@@ -221,7 +225,7 @@ fwd = compute_fwd_ndvar(subject, session,subjects_dir,info,sensor)
 # src is cortex-merged but not pruned.<br>
 # **when change src type (cortex, merged, WB,..) make sure fwd is overwrited**<br>
 
-# %%
+# %% jupyter={"source_hidden": true}
 """
 raw_er = mne.io.read_raw_fif(empty_room, preload=True, verbose=False).pick('meg')
 raw_er.filter(1., 40., phase="zero-double", verbose=False)
@@ -401,12 +405,12 @@ for i in range(10, 12):
     subject = f"sub-{i:02d}"
     for idx, session in enumerate(sessions):
                 
-        morphed_file = f"models/all_runs/{subject}-{session}-ncrf-morphed.pickle"
+        morphed_file = f"models/all_runs/morphed/M{subject}{session}-ncrf.pickle"  #M stands for Morphed
         if os.path.exists(morphed_file):
             print(f"Loading {subject} from file.")
             inanim, anim = load.unpickle(morphed_file)
         else:
-            print(f"Morphing {subject}...")
+            print(f"Morphing {subject}-{session}...")
             modelfile = f"models/all_runs/{subject}-{session}-ncrf.pickle"
             model= load.unpickle(modelfile)
             hlist = model.h
@@ -463,28 +467,28 @@ for i in range(10, 12):
                 subjects_dir=subjects_dir,
                 src_tag="vol-7",
             )
-        #anim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, anim, 'vol-7')                    #wholeBran : single grid
-        #inanim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, inanim, 'vol-7')
+            #anim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, anim, 'vol-7')                    #wholeBran : single grid
+            #inanim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, inanim, 'vol-7')
         
-        anim= anim_fs.smooth('source', 0.01, 'gaussian')
-        inanim= inanim_fs.smooth('source', 0.01, 'gaussian')
+            anim= anim_fs.smooth('source', 0.01, 'gaussian')
+            inanim= inanim_fs.smooth('source', 0.01, 'gaussian')
         
-        save.pickle((inanim, anim), morphed_file)
-        print(f"{subject}-{session}-Morphed Saved  ")
+            save.pickle((inanim, anim), morphed_file)
+            print(f"{subject}-{session}-Morphed Saved  \n")
     
-    cases.append([subject, session, 'inanimate', inanim])
-    cases.append([subject, session, 'animate', anim])
+        cases.append([subject, session, 'inanimate', inanim])
+        cases.append([subject, session, 'animate', anim])
     
 data = Dataset.from_caselist(['subject', 'session', 'animacy', 'ncrf'], cases)
 data.head()
 
 # %% [markdown]
-# ## Average sessions for sub<10
+# ## Average sessions
 
 # %%
-data_avg=data
-data_avg=data_avg.aggregate('subject', drop_bad=True)
-data_avg.tail()
+data_agg=data
+data_avg=data_agg.aggregate(('animacy% subject'), drop_bad=True)
+data_avg
 
 # %% [markdown]
 # # Group Analysis
@@ -497,13 +501,13 @@ res = testnd.VectorDifferenceRelated(
     'inanimate',     
     'animate',   
     match='subject',     
-    data=data,     
+    data=data_avg,     
     tfce=True,           
     tstart=10,                           #ms not second, out put of ncrf 
     tstop=70,
     samples=1000
 )
-save.pickle(res, f"Tests/ncrf/{mod}-ncrf_paired_test.pickle")
+save.pickle(res, f"Tests/all_runs/all_{mod}-ncrf_PT.pickle")
 
 # %%
 diff= res.masked_difference()
