@@ -394,7 +394,7 @@ for i in range(1, 31):
 
 # %%
 cases = []
-for i in range(10, 12):                                      
+for i in range(1, 31):                                      
     if (i>9):
         sessions=["ImageNet01"]
         lastruns = [5]                     #run01,run02,..,run05   
@@ -405,76 +405,82 @@ for i in range(10, 12):
     subject = f"sub-{i:02d}"
     for idx, session in enumerate(sessions):
                 
-        morphed_file = f"models/all_runs/morphed/M{subject}{session}-ncrf.pickle"  #M stands for Morphed
+        morphed_file = f"models/all_runs/morphed/M{subject}-{session}-ncrf.pickle"  #M stands for Morphed
         if os.path.exists(morphed_file):
-            print(f"Loading {subject} from file.")
+            print(f"Loading {subject}-{session} from file.")
             inanim, anim = load.unpickle(morphed_file)
         else:
-            print(f"Morphing {subject}-{session}...")
-            modelfile = f"models/all_runs/{subject}-{session}-ncrf.pickle"
-            model= load.unpickle(modelfile)
-            hlist = model.h
-            
-            if mod=="dummy":
-                inanim = hlist[0]
-                anim = hlist[1]
-            elif mod=="effect":
-                h_mean,h_contrast = hlist[0],hlist[1]
-                anim = h_mean+ h_contrast
-                inanim = h_mean- h_contrast 
+            try:
+                
+                print(f"Morphing {subject}-{session}...")
+                modelfile = f"models/all_runs/{subject}-{session}-ncrf.pickle"
+                model= load.unpickle(modelfile)
+                hlist = model.h
+                
+                if mod=="dummy":
+                    inanim = hlist[0]
+                    anim = hlist[1]
+                elif mod=="effect":
+                    h_mean,h_contrast = hlist[0],hlist[1]
+                    anim = h_mean+ h_contrast
+                    inanim = h_mean- h_contrast 
+        
+                elif mod=="ortho":
+                    h_mean,h_contrast= hlist[0],hlist[1]
+                    anim = h_mean+ code_anim* h_contrast
+                    inanim = h_mean+ code_inanim* h_contrast
+                
+                #morph  
+                fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
+                fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
     
-            elif mod=="ortho":
-                h_mean,h_contrast= hlist[0],hlist[1]
-                anim = h_mean+ code_anim* h_contrast
-                inanim = h_mean+ code_inanim* h_contrast
             
-            #morph  
-            fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
-            fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
-
-        
-            stc_vec_anim = ndvar_merged_to_stc_lr(
-                
-                ndvar=anim,
-                fwd=fwd,
-                subject=subject,
-                subjects_dir=subjects_dir,
-                src_tag="vol-7",
-            )
-            stc_vec_inanim = ndvar_merged_to_stc_lr(
-                
-                ndvar=inanim,
-                fwd=fwd,
-                subject=subject,
-                subjects_dir=subjects_dir,
-                src_tag="vol-7",
-            )
-        
-            print("     1/2")        
-            an_L_fs, an_R_fs, anim_fs = morph_hemi(
-                stc_vec_anim,
-                subject=subject,
-                subject_to="fsaverage2",
-                subjects_dir=subjects_dir,
-                src_tag="vol-7",
-            )
+                stc_vec_anim = ndvar_merged_to_stc_lr(
+                    
+                    ndvar=anim,
+                    fwd=fwd,
+                    subject=subject,
+                    subjects_dir=subjects_dir,
+                    src_tag="vol-7",
+                )
+                stc_vec_inanim = ndvar_merged_to_stc_lr(
+                    
+                    ndvar=inanim,
+                    fwd=fwd,
+                    subject=subject,
+                    subjects_dir=subjects_dir,
+                    src_tag="vol-7",
+                )
             
-            print("     2/2")        
-            _, _, inanim_fs = morph_hemi(
-                stc_vec_inanim,
-                subject=subject,
-                subject_to="fsaverage2",
-                subjects_dir=subjects_dir,
-                src_tag="vol-7",
-            )
-            #anim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, anim, 'vol-7')                    #wholeBran : single grid
-            #inanim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, inanim, 'vol-7')
-        
-            anim= anim_fs.smooth('source', 0.01, 'gaussian')
-            inanim= inanim_fs.smooth('source', 0.01, 'gaussian')
-        
-            save.pickle((inanim, anim), morphed_file)
-            print(f"{subject}-{session}-Morphed Saved  \n")
+                print("     1/2")        
+                an_L_fs, an_R_fs, anim_fs = morph_hemi(
+                    stc_vec_anim,
+                    subject=subject,
+                    subject_to="fsaverage2",
+                    subjects_dir=subjects_dir,
+                    src_tag="vol-7",
+                )
+                
+                print("     2/2")        
+                _, _, inanim_fs = morph_hemi(
+                    stc_vec_inanim,
+                    subject=subject,
+                    subject_to="fsaverage2",
+                    subjects_dir=subjects_dir,
+                    src_tag="vol-7",
+                )
+                #anim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, anim, 'vol-7')                    #wholeBran : single grid
+                #inanim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, inanim, 'vol-7')
+                
+                
+                anim= anim_fs.smooth('source', 0.01, 'gaussian')
+                inanim= inanim_fs.smooth('source', 0.01, 'gaussian')
+            
+                save.pickle((inanim, anim), morphed_file)
+                print(f"\n{subject}-{session}-Morphed Saved \n ")
+            except Exception as e:
+                print(f"\n----------- Error processing {subject}: {e}\n")   
+            
     
         cases.append([subject, session, 'inanimate', inanim])
         cases.append([subject, session, 'animate', anim])
@@ -501,10 +507,10 @@ res = testnd.VectorDifferenceRelated(
     'inanimate',     
     'animate',   
     match='subject',     
-    data=data_avg,     
+    data=data,     
     tfce=True,           
-    tstart=10,                           #ms not second, out put of ncrf 
-    tstop=70,
+    tstart=100,                           #ms not second, out put of ncrf 
+    tstop=700,
     samples=1000
 )
 save.pickle(res, f"Tests/all_runs/all_{mod}-ncrf_PT.pickle")
@@ -512,7 +518,7 @@ save.pickle(res, f"Tests/all_runs/all_{mod}-ncrf_PT.pickle")
 # %%
 diff= res.masked_difference()
 p = plot.Butterfly(diff.norm('space'), color='k',title='anim VS inanim')
-times = [15,21,34,45,50,60]
+times = [100,150,210,340,450,500,600]
 for t in times:
     p.add_vline(t)
 for t in times:
@@ -522,26 +528,26 @@ for t in times:
 # ## ONE Sample test
 
 # %%
-data_inan = data.sub("animacy == 'inanimate'")
+data_inan = data_avg.sub("animacy == 'inanimate'")
 result_inan = testnd.Vector('ncrf', match='subject', data=data_inan, tfce=True, tstart=1, tstop=600,samples=1000)
 
 # %%
 p = plot.Butterfly(result_inan.masked_difference().norm('space'), color='k')
-times = [13,25,40]
+times = [130,250,400]
 for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(result_inan.masked_difference().sub(time=t),title=f"Inanimate, {t}s")  
 
 # %%
-data_an = data.sub("animacy == 'animate'")
-result_an = testnd.Vector('ncrf', match='subject', data=data_an, tfce=True, tstart=1, tstop=60,samples=1000)
+data_an = data_avg.sub("animacy == 'animate'")
+result_an = testnd.Vector('ncrf', match='subject', data=data_an, tfce=True, tstart=100, tstop=600,samples=1000)
 result_an
 save.pickle((result_an,result_inan), f"Tests/ncrf/{mod}-ncrf_1samptest.pickle")
 
 # %%
 p = plot.Butterfly(result_an.masked_difference().norm('space'), color='k')
-times = [13,25,40]
+times = [130,250,400]
 for t in times:
     p.add_vline(t)
 for t in times:
