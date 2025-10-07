@@ -147,7 +147,8 @@ def GlassBrainVideo(tmin, tmax, dt, nd, vname):
 def morph_nd(subject_from, subject_to, subjects_dir, ndvar, src):
     
    #Morph an NDVar from one subject space to another. Returns morphed ndvar
-   
+    #anim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, anim, 'vol-7') 
+    #When whole brain- NCRF morphing
    
     
     src_sub = mne.read_source_spaces(f"{subjects_dir}/{subject_from}/bem/{subject_from}-{src}-src.fif")
@@ -315,14 +316,12 @@ def make_event_table(subject, session, run, *, root="/Users/maryamvalian/Data/ds
         
         if "trial_type" in ev.columns:
             mask = ev["trial_type"].astype(str).str.lower().isin(["stim_on", "stim"])
-        elif "value" in ev.columns:
-            mask = ev["value"].astype(str).isin([str(stim_id), f"{stim_id:02d}", "stim_on"])
-        else:
-            mask = pd.Series(True, index=ev.index)  # fallback: take all rows
+        
 
         stim_times = ev.loc[mask, "onset"].to_numpy(dtype=float)
     except Exception:
         
+        print("event.tsv failed")
         raw = mne.io.read_raw_fif(str(raw_fif), preload=False, verbose="error")
         events = mne.find_events(raw, stim_channel=stim_channel, verbose="error")
         stim = events[events[:, 2] == stim_id]
@@ -341,3 +340,4 @@ def make_event_table(subject, session, run, *, root="/Users/maryamvalian/Data/ds
 
     return event_table
 
+#----------------------------------_______________________________ For random trail subsets______________________------------------
