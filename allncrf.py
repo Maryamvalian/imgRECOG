@@ -207,6 +207,7 @@ for i in range(1, 31):
 # If fwd file not founded during morphing:
 
 # %%
+"""
 subject="sub-11"
 session="ImageNet01"
 clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
@@ -215,6 +216,7 @@ info= clean.info
 meg_ndvar = load.fiff.raw_ndvar(clean)
 sensor=meg_ndvar.sensor
 fwd = compute_fwd_ndvar(subject, session,subjects_dir,info,sensor)
+"""
 
 # %% [markdown]
 #
@@ -388,7 +390,7 @@ for i in range(1, 31):
 
 # %% [markdown]
 # # Morph and save
-# <hr><br><br>
+# <hr><br>
 #
 # ## Dataset from cases
 
@@ -469,15 +471,14 @@ for i in range(1, 31):
                     subjects_dir=subjects_dir,
                     src_tag="vol-7",
                 )
-                #anim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, anim, 'vol-7')                    #wholeBran : single grid
-                #inanim_fs= morph_nd(subject, 'fsaverage2', subjects_dir, inanim, 'vol-7')
-                
+                               
                 
                 anim= anim_fs.smooth('source', 0.01, 'gaussian')
                 inanim= inanim_fs.smooth('source', 0.01, 'gaussian')
             
                 save.pickle((inanim, anim), morphed_file)
                 print(f"\n{subject}-{session}-Morphed Saved \n ")
+                
             except Exception as e:
                 print(f"\n----------- Error processing {subject}: {e}\n")   
             
