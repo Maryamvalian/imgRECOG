@@ -25,6 +25,7 @@ from eelbrain._data_obj import VolumeSourceSpace
 import os
 from pathlib import Path
 from Beyond import *
+import eelbrain as eb
 
 # %%
 mod="dummy"  #common, effect, dummy, ortho (effect with unbalanced trial counts)
@@ -177,6 +178,7 @@ subs
 # # Fit NCRF Models
 
 # %%
+#Consistency folder for independant subsets , Consist for nested subsets model output
 for i in range (1,10):                 #first 9 subjects
     if i==7 :
         session="ImageNet04"
@@ -198,7 +200,7 @@ for i in range (1,10):                 #first 9 subjects
     for size in range (1,8):            #(1,9) we already have model8 from allruns folder
         subset=subs[size][0]
         #print(f"{subset}")
-        modelfile = f"models/consistency/{size}-{subject}-{session}-ncrf.pickle"
+        modelfile = f"models/consist/{size}-{subject}-{session}-ncrf.pickle"
         if os.path.exists(modelfile):
             print(f"{size}-{subject}-{session} model file exists.")
             continue
@@ -316,7 +318,7 @@ for size in range (1,9):
 # %% [markdown]
 # # Plot morphed model
 
-# %% jupyter={"outputs_hidden": true, "source_hidden": true}
+# %% jupyter={"source_hidden": true}
 size=4
 
 morphed_file = f"models/consistency/M{size}-{subject}-{session}-ncrf.pickle" 
@@ -776,20 +778,20 @@ plt.show()
 # # GROUP LEVEL
 
 # %%
+def load_model(size):
+    
+    morphed_file = f"models/consistency//M{size}-{subject}-{session}-ncrf.pickle"
+    inan, anim = load.unpickle(morphed_file)
+    return inan, anim
+
+
+# %%
 animacy="anim"
 
-def fisher_r_to_z(R_matrix):
-    
-    R_matrix = np.asarray(R_matrix)
-    Z_matrix = 0.5 * np.log((1 + R_matrix) / (1 - R_matrix))
-    return Z_matrix
+R_data = np.full((9,7), np.nan, dtype=float)             #subject* models (0,1,2,3,4,5,6) : R-value for m1,..,m7 corelation with m8
 
-
-# ---
- #subject* models (0,1,2,3,4,5,6) : R-value for m1,..,m7 corelation with m8
-R_data=[]
-for i in range (1,10):
-    if i in [1, 2, 3,  4, 5, 8]:
+for i in range (1,31):
+    if i==4 or i==5 or i==8 or i==1 or i==2 or i==3:
         session="ImageNet03"
     else:
         continue
@@ -812,17 +814,14 @@ for i in range (1,10):
     
     flattened = []
     for m in models:
-        data = np.asarray(m.get_data())  
+        data = np.asarray(m.get_data()) 
         flat = data.reshape(-1)          
         flattened.append(flat)
     
     
     corr_mat = np.corrcoef(flattened)
-    R_data.append(corr_mat[7,:7].round(4) )
+    R_data[i-1]=corr_mat[7,:7].round(4)             # corr_mat[7] : correlation of all models with model8 last numbeer is always 1 corr(model8,model8)=1
        
-print(R_data.head()) 
-
-
 
 
 R_data=np.array(R_data)
@@ -841,7 +840,7 @@ for i in range(n_subjects):
         z_score = Z_data[i, j]
         cases.append([subject_id, trial_size, z_score])
 
-column_names = ['Subject', 'Trial_Size', 'Fisher_Z']
+column_names = ['Subject','Trial_Size', 'Fisher_Z']
 ds = eb.Dataset.from_caselist(column_names, cases)
 print(ds.head())
 
@@ -854,3 +853,9 @@ anova_results = eb.test.ANOVA(y='Fisher_Z',
                               title=" Trial Size Effect")
 print(anova_results)
 
+
+# %%
+ds
+
+
+# %%
