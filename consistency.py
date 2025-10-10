@@ -140,83 +140,101 @@ import random
 from typing import List, Dict
 
 def independent_subsets(runs: List[str], k_max: int, n_repeats: int = 2, seed: int = 11) -> Dict[int, List[List[str]]]:
-    """
-    Make random subsets for each size k = 1..k_max.
-    - Each subset has k distinct runs (sampled without replacement).
-    - Subsets for different k are independent (not nested).
-    """
+   
     rng = random.Random(seed)
     out: Dict[int, List[List[str]]] = {}
     for k in range(1, k_max + 1):
         out[k] = [rng.sample(runs, k) for _ in range(n_repeats)]
     return out
+#-------------------------------------------
+def nested_subsets(runs: List[str], k_max: int, n_repeats: int = 2, seed: int = 11) -> Dict[int, List[List[str]]]:
+    
+    rng = random.Random(seed)
+    out: Dict[int, List[List[str]]] = {}
+    
+    for _ in range(n_repeats):
+        rng.shuffle(runs)  # random order of runs
+        seq = []
+        for k in range(1, k_max + 1):
+            seq.append(runs[:k])
+            out.setdefault(k, []).append(runs[:k])
+            
+    return out
+#-------------------------------------------    
 
+
+
+# %% [markdown]
+# # Make random subset 
 
 # %%
 runs = [f"0{i}" for i in range(1, 9)]
-runs
-
-# %%
-len(runs)
-
-# %%
-subs = independent_subsets(runs, k_max=8, n_repeats=1, seed=11)          #k_max=len(runs)
-
-# %%
+#subs = independent_subsets(runs, k_max=8, n_repeats=1, seed=11)      
+subs = nested_subsets(runs, k_max=8, n_repeats=1, seed=11)
 subs
 
-# %%
-subject="sub-05"
-session="ImageNet03"
+# %% [markdown]
+# # Fit NCRF Models
 
 # %%
-#FWD for Session
-print(f"computing fwd for {subject}-{session}... ")
-clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
-clean = mne.io.read_raw_fif(clean_fif, preload=False,verbose=False)
-info= clean.info           
-meg_ndvar = load.fiff.raw_ndvar(clean)
-sensor=meg_ndvar.sensor
-fwd = compute_fwd_ndvar(subject, session,subjects_dir,info,sensor)
-
-
-
-for size in range (1,8):            #(1,9)
-    subset=subs[size][0]
-    #print(f"{subset}")
-    modelfile = f"models/consistency/{size}-{subject}-{session}-ncrf.pickle"
-    if os.path.exists(modelfile):
-        print(f"{size}-{subject}-{session} model file exists.")
-        continue
-    try:        
-        
-        meg_all = []
-        stim_all = []
-        for run in subset:
+for i in range (1,10):                 #first 9 subjects
+    if i==7 :
+        session="ImageNet04"
+    else:
+        session="ImageNet03"
+    subject = f"sub-{i:02d}"
+    
+    #FWD for Session
+    print(f"computing fwd for {subject}-{session}... ")
+    clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
+    clean = mne.io.read_raw_fif(clean_fif, preload=False,verbose=False)
+    info= clean.info           
+    meg_ndvar = load.fiff.raw_ndvar(clean)
+    sensor=meg_ndvar.sensor
+    fwd = compute_fwd_ndvar(subject, session,subjects_dir,info,sensor)
+    
+    
+    
+    for size in range (1,8):            #(1,9) we already have model8 from allruns folder
+        subset=subs[size][0]
+        #print(f"{subset}")
+        modelfile = f"models/consistency/{size}-{subject}-{session}-ncrf.pickle"
+        if os.path.exists(modelfile):
+            print(f"{size}-{subject}-{session} model file exists.")
+            continue
+        try:        
             
-            print(f"Loading run-{run} MEG ...")
-            meg= load_meg_ndvar(subject, session, run)
-            meg_all.append(meg)
-            event_table= make_event_table(subject, session, run)
-            stim1,stim2= make_predictors_for_run(meg, event_table,mod=mod)
-            predictors=[stim1,stim2]
-            stim_all.append(predictors)  
+            meg_all = []
+            stim_all = []
+            for run in subset:
+                
+                print(f"Loading run-{run} MEG ...")
+                meg= load_meg_ndvar(subject, session, run)
+                meg_all.append(meg)
+                event_table= make_event_table(subject, session, run)
+                stim1,stim2= make_predictors_for_run(meg, event_table,mod=mod)
+                predictors=[stim1,stim2]
+                stim_all.append(predictors)  
+                
+            args = (meg_all , stim_all, fwd , noise_cov , 0,0.7)
+            kwargs = {'normalize': 'l1','in_place': False,'mu':'auto',
+                      'verbose': True,'n_iter': 10,'n_iterc': 10,'n_iterf': 100}        
+            model = fit_ncrf(*args, **kwargs)  
+            save.pickle(model, modelfile)
+            print(f"\nModel saved to {modelfile}\n")  
             
-        args = (meg_all , stim_all, fwd , noise_cov , 0,0.7)
-        kwargs = {'normalize': 'l1','in_place': False,'mu':'auto',
-                  'verbose': True,'n_iter': 10,'n_iterc': 10,'n_iterf': 100}        
-        model = fit_ncrf(*args, **kwargs)  
-        save.pickle(model, modelfile)
-        print(f"\nModel saved to {modelfile}\n")  
-        
-    except Exception as e:
-     print(f"\n----------- Error processing {subject}: {e}\n")   
+        except Exception as e:
+         print(f"\n----------- Error processing {subject}: {e}\n")   
 
 # %% [markdown]
 # # morphing
 #
 
 # %%
+subject=""
+session=""
+
+
 for size in range (1,9):
     
     morphed_file = f"models/consistency/M{size}-{subject}-{session}-ncrf.pickle"  #M stands for Morphed
@@ -298,8 +316,8 @@ for size in range (1,9):
 # %% [markdown]
 # # Plot morphed model
 
-# %%
-size=7
+# %% jupyter={"outputs_hidden": true, "source_hidden": true}
+size=4
 
 morphed_file = f"models/consistency/M{size}-{subject}-{session}-ncrf.pickle" 
 inan, an = load.unpickle(morphed_file)
@@ -319,7 +337,8 @@ for t in times:
     f = plot.GlassBrain(inan.sub(time=t),title=f"{size}-{subject}{session}, inanim (NCRF), {t}ms") 
 
 
-# %%
+# %% [markdown]
+# # Save plot AW-COSINE SIMILARITY - all_paired
 
 # %%
 import os
@@ -327,7 +346,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-subject = "sub-05"
+subject = "sub-04"
 session = "ImageNet03"
 model_dir = "models/consistency"
 sizes = list(range(1, 9))  # 1..8
@@ -343,6 +362,7 @@ def load_model(size):
 
 def ndvar_cosine(nd1, nd2, eps=1e-12):
     
+    A = np.asarray(nd1.get_data())
     B = np.asarray(nd2.get_data())
     if A.shape != B.shape:
         raise ValueError(f"Shape mismatch: {A.shape} vs {B.shape}")
@@ -353,6 +373,60 @@ def ndvar_cosine(nd1, nd2, eps=1e-12):
     if na < eps or nb < eps:
         return np.nan
     return float(np.dot(a, b) / (na * nb))
+#------------------------------------------------
+def ndvar_AWcosine(nd1, nd2, thr=1e-12, mode="or"):
+    
+    A = np.asarray(nd1.get_data(), dtype=float)  # (V, 3, T)
+    B = np.asarray(nd2.get_data(), dtype=float)
+    if A.shape != B.shape:
+        raise ValueError(f"Shape mismatch: {A.shape} vs {B.shape}")
+
+    V, _, T = A.shape
+    cos_aw_t = np.full(T, np.nan)
+    n_used   = np.zeros(T, dtype=int)
+
+    
+    tmin  = float(nd1.time.tmin)
+    tstep = float(nd1.time.tstep)
+    times = tmin + np.arange(T) * tstep
+
+    for t in range(T):
+        Ai = A[:, :, t]                          
+        Bi = B[:, :, t]
+        aN = np.linalg.norm(Ai, axis=1)         
+        bN = np.linalg.norm(Bi, axis=1)
+
+        if mode.lower() == "and":
+            consider = (aN > thr) & (bN > thr)
+        else: 
+            consider = (aN > thr) | (bN > thr)
+
+        
+        valid = consider & (aN > 0) & (bN > 0)
+        if not np.any(valid):
+            continue
+
+        Ai_v = Ai[valid]
+        Bi_v = Bi[valid]
+        aN_v = aN[valid]
+        bN_v = bN[valid]
+
+        # voxel cosine 
+        dots  = np.einsum('ij,ij->i', Ai_v, Bi_v)   # <A_i, B_i>
+        cos_i = dots / (aN_v * bN_v)                # (n_vox_t,)
+
+        #voxel amplitude weights 
+        w = 0.5 * (aN_v + bN_v)
+        wsum = w.sum()
+        if wsum == 0:
+            continue
+
+        cos_aw_t[t] = float(np.sum(w * cos_i) / wsum)
+        n_used[t]   = int(valid.sum())
+
+    return cos_aw_t, n_used, times
+
+#--------------------------------------------
 
 def compute_pairwise_cosine(models):
     
@@ -361,9 +435,14 @@ def compute_pairwise_cosine(models):
     for i in range(n):
         M[i, i] = 1.0
         for j in range(i + 1, n):
-            c = ndvar_cosine(models[i], models[j])
+            cos_aw_t, n_used, times = ndvar_AWcosine(models[i],models[j], thr=1e-12, mode="or")              #AWCOSINE
+            c = cos_aw_t.mean()
+            
+            #c = ndvar_cosine(models[i], models[j])                                                         #cosine
+            
             M[i, j] = M[j, i] = c
     return M
+    
 
 #------------------------------------
 def plot_half_heatmap_with_trials(matrix, kept_sizes, title, outfile):
@@ -372,7 +451,7 @@ def plot_half_heatmap_with_trials(matrix, kept_sizes, title, outfile):
     trials = [s * TRIALS_PER_RUN for s in kept_sizes]
 
     # Mask lower triangle and diagonal
-    mask = np.tri(n, n, k=0, dtype=bool)  # True on lower incl. diag
+    mask = np.tri(n, n, k=0, dtype=bool) 
     m = np.ma.array(matrix, mask=mask)
 
     fig, ax = plt.subplots(figsize=(6, 5))
@@ -381,21 +460,20 @@ def plot_half_heatmap_with_trials(matrix, kept_sizes, title, outfile):
     ax.set_xticklabels(trials); ax.set_yticklabels(trials)
     ax.set_xlabel("Number of trials"); ax.set_ylabel("Number of trials")
     ax.set_title(title)
-
-    # Optional: annotate only unmasked upper-triangle cells
+    
     for i in range(n):
         for j in range(n):
             if i < j and np.isfinite(matrix[i, j]):
                 ax.text(j, i, f"{matrix[i, j]:.2f}",
                         ha="center", va="center", fontsize=8)
 
-    # Make masked (lower) region appear white
+    
     cmap = im.get_cmap().copy()
     cmap.set_bad(color="white")
     im.set_cmap(cmap)
-
+    
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    cbar.set_label("Cosine similarity")
+    cbar.set_label("AWCosine similarity")
     fig.tight_layout()
     fig.savefig(outfile, dpi=150)
     plt.close(fig)
@@ -432,18 +510,351 @@ inan_cos = compute_pairwise_cosine(inan_models)
 
 plot_half_heatmap_with_trials(
     anim_cos, kept_sizes,
-    title=f"Cosine similarity (ANIMATE) — {subject} {session}",
-    outfile=f"{subject}_{session}_cosine_anim_tri.png"
+    title=f"AWCosine similarity (ANIMATE) — {subject} {session}",
+    outfile=f"{subject}_{session}_c_anim_tri.png"
 )
 
 plot_half_heatmap_with_trials(
     inan_cos, kept_sizes,
-    title=f"Cosine similarity (INANIMATE) — {subject} {session}",
-    outfile=f"{subject}_{session}_cosine_inanim_tri.png"
+    title=f"AWCosine similarity (INANIMATE) — {subject} {session}",
+    outfile=f"{subject}_{session}_c_inanim_tri.png"
 )
 
 
 
-# %%
+# %% [markdown]
+# # plot pair-wise compare AW-Cosine
 
 # %%
+subject
+
+# %%
+k1, k2 = 4 ,8             #pick model by size
+
+
+inan1,an1 = load_model(k1)
+inan2,an2 = load_model(k2)
+cos_aw_t, n_used, times = ndvar_AWcosine(an1,an2, thr=1e-12, mode="or")
+
+# quick plot
+"""
+import matplotlib.pyplot as plt
+plt.plot(times, cos_aw_t, marker='o', ms=3)
+plt.xlabel("Time (s)")
+plt.ylabel("AW-cosine")
+plt.title(f"{subject}- an1 vs an8")
+plt.ylim(0.8, 1)
+plt.grid(True, alpha=0.3)
+plt.show()
+"""
+
+#plot with n_used
+import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
+from matplotlib.colors import LinearSegmentedColormap, Normalize
+
+
+m = np.isfinite(cos_aw_t) & np.isfinite(times) & (n_used > 0)
+t = times[m]
+y = cos_aw_t[m]
+w = n_used[m]
+
+if len(t) < 2:
+    raise RuntimeError("Need at least two valid points to draw segments.")
+# build line segments
+points = np.column_stack([t, y])                       # (N, 2)
+segs = np.stack([points[:-1], points[1:]], axis=1)     # (N-1, 2, 2)
+
+# color by mean n_used of segment endpoints
+w_mid = 0.5 * (w[:-1] + w[1:])
+
+# blue -> orange colormap
+cmap = LinearSegmentedColormap.from_list("blue_orange", ["#1f77b4", "#ff7f0e"])
+norm = Normalize(vmin=w_mid.min(), vmax=w_mid.max())
+
+fig, ax = plt.subplots(figsize=(8, 4))
+
+lc = LineCollection(segs, cmap=cmap, norm=norm, linewidth=2.0)
+lc.set_array(w_mid)
+ax.add_collection(lc)
+
+# colored markers at the points
+sc = ax.scatter(t, y, c=w, cmap=cmap, norm=norm, s=18, zorder=3, edgecolor="none")
+
+ax.set_xlim(t.min(), t.max())
+ax.set_ylim(0.7, 1.0)  # adjust as you like
+ax.set_xlabel("Time (s)")
+ax.set_ylabel("Amplitude-weighted cosine")
+ax.set_title(f"AW-Cosine(an{k1},an{k2})")
+
+cbar = fig.colorbar(sc, ax=ax)
+cbar.set_label("# active sources (n_used)")
+
+ax.grid(True, alpha=0.3)
+fig.tight_layout()
+plt.show()
+
+# %% [markdown]
+# # PEARSON R
+
+# %%
+animacy="inanim"
+
+anim_models = []
+inan_models = []
+
+for k in range(1,9):
+    try:
+        inan, anim = load_model(k)
+        inan_models.append(inan)
+        anim_models.append(anim)      
+        
+    except FileNotFoundError:
+        print("Load Model Failed!")
+        
+models = anim_models if animacy == "inanim" else inan_models
+names = [f'M{i+1}' for i in range(len(models))]
+
+flattened = []
+for m in models:
+    data = np.asarray(m.get_data())  # (vox, 3, time)
+    flat = data.reshape(-1)          
+    flattened.append(flat)
+
+
+corr_mat = np.corrcoef(flattened)
+
+#plot
+fig, ax = plt.subplots(figsize=(6, 5))
+im = ax.imshow(corr_mat, cmap='coolwarm', vmin=-1, vmax=1)
+ax.set_xticks(range(len(names)))
+ax.set_xticklabels(names, rotation=45)
+ax.set_yticks(range(len(names)))
+ax.set_yticklabels(names)
+
+ax.invert_yaxis()
+
+plt.colorbar(im, ax=ax, label='Pearson r')
+ax.set_title(f'{subject}- Correlation,  {animacy}  ')
+plt.tight_layout()
+plt.show()
+
+        
+
+# %% [markdown]
+# # R2 Measure for each voxel 
+# Compare Model A with true model B<br>
+# ∥⋅∥ denotes the Euclidean norm $\sqrt{x^2 + y^2 + z^2}$
+
+# %% [markdown]
+# $$
+# R_i^{2} = 1 -
+# \frac{\displaystyle\sum_{t} \left\lVert \mathbf{A}_i(t) - \mathbf{B}_i(t) \right\rVert^{2}}
+# {\displaystyle\sum_{t} \left\lVert \mathbf{B}_i(t) - \bar{\mathbf{B}}_i \right\rVert^{2}}
+# $$
+#
+
+# %%
+def ndvar_r2(model1_tuple, model2_tuple, animacy="anim"):
+    
+    inan1, an1 = model1_tuple
+    inan2, an2 = model2_tuple
+
+   
+    A = np.asarray(an1.get_data())  if animacy == "anim" else np.asarray(inan1.get_data()) 
+    B = np.asarray(an2.get_data())  if animacy == "anim" else np.asarray(inan2.get_data()) 
+
+    scale = 1e12
+    A_scaled = A * scale
+    B_scaled = B * scale
+
+   
+    B_mean = B_scaled.mean(axis=2, keepdims=True)
+
+    
+    ss_res = np.sum((B_scaled - A_scaled) ** 2, axis=(1, 2))
+    ss_tot = np.sum((B_scaled - B_mean) ** 2, axis=(1, 2))
+
+   
+    R2_vox = np.where(ss_tot != 0, 1 - ss_res / ss_tot, np.nan)
+
+    #for ploting
+    B_power = np.linalg.norm(B_scaled, axis=(1, 2))
+
+    return R2_vox, B_power
+#-----------------------------------------------------------------
+k1, k2 = 6, 8
+animacy = "anim"
+model1_tuple = load_model(k1) 
+model2_tuple = load_model(k2) 
+
+R2_vox, B_power = ndvar_r2(model1_tuple, model2_tuple, animacy=animacy)
+
+print(f"Mean R² (vector): {np.nanmean(R2_vox):.3f}")
+
+#plot
+# --- compute overall signal norm per voxel (strength) ---
+B_power = np.linalg.norm(B_scaled, axis=(1, 2))  # total magnitude per voxel
+
+# --- threshold for activity ---
+thr = np.percentile(B_power, 70)  # or set manually, e.g. thr = 1e-10
+
+active_mask = B_power > thr
+
+# --- assign colors ---
+colors = np.where(active_mask, 'red', 'lightgray')
+
+# --- plot ---
+title=f'R2- {subject}:{animacy}{k1} vs {animacy}{k2} '
+plt.figure(figsize=(8, 4))
+plt.scatter(np.arange(len(R2_vox)), R2_vox, c=colors, s=10, alpha=0.8)
+plt.axhline(0, color='k', linestyle='--', linewidth=0.8)
+plt.xlabel('Voxel index')
+plt.ylabel('$R^2$')
+plt.title(title)
+plt.show()
+
+#plot on brain
+R2_nd = NDVar(R2_vox,src, name='R2')
+plot.GlassBrain(
+    R2_nd,
+    vmin=-0.0, vmax=1.0,
+    cmap='inferno',
+    threshold=0.6,          
+    colorbar=True,
+    title=title
+)
+
+# %% [markdown]
+# ## plot R2 (model i , and Model 8 )
+
+# %%
+subject="sub-08"
+
+# %%
+animacy="inanim"
+
+names = [f'M{i}' for i in range(1,9)]
+
+n = len(names)
+M = np.full((n), np.nan, dtype=float)
+model2_tuple = load_model(n)
+for i in range(n):
+   
+    model1_tuple = load_model(i+1) 
+    R2_vox, B_power = ndvar_r2(model1_tuple, model2_tuple, animacy=animacy)
+    M[i] = R2_vox.mean()
+
+
+# Create model indices (X-axis values)
+model_indices = np.arange(1, n + 1)
+
+fig, ax = plt.subplots(figsize=(7, 5))
+
+# Plot 
+ax.plot(model_indices, M, marker='o', linestyle='-', color='C0', label='Mean $R^2$')
+
+
+max_r2_index = np.argmax(M)
+ax.plot(model_indices[max_r2_index], M[max_r2_index],
+        marker='*', markersize=12, color='red',
+        label=f'Max $R^2$ = {M[max_r2_index]:.3f}')
+ax.set_xlabel('Model Index (Size $i*200$)')
+ax.set_ylabel('Mean $R^2$ (across voxels)')
+ax.set_title(f'({subject}, {animacy})')
+ax.set_xticks(model_indices)
+ax.grid(True, linestyle='--', alpha=0.6)
+ax.legend()
+plt.tight_layout()
+plt.show()       
+                                                             
+         
+
+    
+
+# %% [markdown]
+# # GROUP LEVEL
+
+# %%
+animacy="anim"
+
+def fisher_r_to_z(R_matrix):
+    
+    R_matrix = np.asarray(R_matrix)
+    Z_matrix = 0.5 * np.log((1 + R_matrix) / (1 - R_matrix))
+    return Z_matrix
+
+
+# ---
+
+
+
+
+ #subject* models (0,1,2,3,4,5,6) : R-value for m1,..,m7 corelation with m8
+R_data=[]
+for i in range (1,10):
+    if i in [1, 2, 3,  4, 5, 8]:
+        session="ImageNet03"
+    else:
+        continue
+    subject = f"sub-{i:02d}"
+
+    
+    anim_models = []
+    inan_models = []
+    
+    for k in range(1,9):
+        try:
+            inan, anim = load_model(k)
+            inan_models.append(inan)
+            anim_models.append(anim)      
+            
+        except FileNotFoundError:
+            print("Load Model Failed!")
+            
+    models = anim_models if animacy == "anim" else inan_models
+    
+    flattened = []
+    for m in models:
+        data = np.asarray(m.get_data())  
+        flat = data.reshape(-1)          
+        flattened.append(flat)
+    
+    
+    corr_mat = np.corrcoef(flattened)
+    R_data.append(corr_mat[7,:7].round(4) )
+       
+print(R_data.head()) 
+
+
+
+
+R_data=np.array(R_data)
+Z_data = fisher_r_to_z(R_data)
+
+n_subjects, n_conditions = Z_data.shape
+    
+    
+cases = []
+for i in range(n_subjects):
+    
+    subject_id = i + 1 
+    for j in range(n_conditions):
+       
+        trial_size = f"{j+1}"
+        z_score = Z_data[i, j]
+        cases.append([subject_id, trial_size, z_score])
+
+column_names = ['Subject', 'Trial_Size', 'Fisher_Z']
+ds = eb.Dataset.from_caselist(column_names, cases)
+print(ds.head())
+
+
+
+anova_results = eb.test.ANOVA(y='Fisher_Z',
+                              x='Trial_Size',  
+                              sub='Subject',   
+                              data=ds, 
+                              title=" Trial Size Effect")
+print(anova_results)
+
