@@ -786,10 +786,6 @@ def fisher_r_to_z(R_matrix):
 
 
 # ---
-
-
-
-
  #subject* models (0,1,2,3,4,5,6) : R-value for m1,..,m7 corelation with m8
 R_data=[]
 for i in range (1,10):
