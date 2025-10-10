@@ -33,7 +33,7 @@ rewrite=True
 root = Path("~/Data/ds005810")
 subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
 fwd_dir=Path("/Users/maryamvalian/Data/ds005810/derivatives/eelbrain/cache/raw")
-
+model_dir = "models/consist"
 
 # %%
 empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-noise_meg.fif"
@@ -239,7 +239,7 @@ session=""
 
 for size in range (1,9):
     
-    morphed_file = f"models/consistency/M{size}-{subject}-{session}-ncrf.pickle"  #M stands for Morphed
+    morphed_file = f"{model_dir}/M{size}-{subject}-{session}-ncrf.pickle"
     if os.path.exists(morphed_file):
         
         print(f"Loading{size}-{subject}-{session} from file.")
@@ -248,7 +248,7 @@ for size in range (1,9):
         try:
                 
             print(f"Morphing {size}-{subject}-{session}...")
-            modelfile = f"models/consistency/{size}-{subject}-{session}-ncrf.pickle"
+            modelfile = f"{model_dir}/{size}-{subject}-{session}-ncrf.pickle"
             model= load.unpickle(modelfile)
             hlist = model.h
             
@@ -318,10 +318,10 @@ for size in range (1,9):
 # %% [markdown]
 # # Plot morphed model
 
-# %% jupyter={"source_hidden": true}
-size=4
+# %%
+size=8
 
-morphed_file = f"models/consistency/M{size}-{subject}-{session}-ncrf.pickle" 
+morphed_file = f"{model_dir}/M{size}-{subject}-{session}-ncrf.pickle"
 inan, an = load.unpickle(morphed_file)
 
 p = plot.Butterfly(an.norm('space'), color='k',title=f"Anim Size={size}")
@@ -350,7 +350,7 @@ import matplotlib.pyplot as plt
 
 subject = "sub-04"
 session = "ImageNet03"
-model_dir = "models/consistency"
+
 sizes = list(range(1, 9))  # 1..8
 TRIALS_PER_RUN = 200  
 
@@ -780,7 +780,7 @@ plt.show()
 # %%
 def load_model(size):
     
-    morphed_file = f"models/consistency//M{size}-{subject}-{session}-ncrf.pickle"
+    morphed_file = f"{model_dir}/M{size}-{subject}-{session}-ncrf.pickle"
     inan, anim = load.unpickle(morphed_file)
     return inan, anim
 
@@ -855,7 +855,7 @@ print(anova_results)
 
 
 # %%
-ds
+ds.tail()
 
 
 # %%
