@@ -340,4 +340,12 @@ def make_event_table(subject, session, run, *, root="/Users/maryamvalian/Data/ds
 
     return event_table
 
-#----------------------------------_______________________________ For random trail subsets______________________------------------
+#----------------------------------_______________________________ 
+
+
+def fisher_r_to_z(R_matrix):
+    
+    R_matrix = np.asarray(R_matrix)
+    Z_matrix = 0.5 * np.log((1 + R_matrix) / (1 - R_matrix))
+    return Z_matrix
+
