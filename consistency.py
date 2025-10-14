@@ -197,7 +197,7 @@ for i in range (1,10):                 #first 9 subjects
     
     
     
-    for size in range (1,8):            #(1,9) we already have model8 from allruns folder
+    for size in range (1,9):           
         subset=subs[size][0]
         #print(f"{subset}")
         modelfile = f"models/consist/{size}-{subject}-{session}-ncrf.pickle"
@@ -233,8 +233,8 @@ for i in range (1,10):                 #first 9 subjects
 #
 
 # %%
-subject=""
-session=""
+subject="sub-08"
+session="ImageNet03"
 
 
 for size in range (1,9):
@@ -790,11 +790,11 @@ animacy="anim"
 
 R_data = np.full((9,7), np.nan, dtype=float)             #subject* models (0,1,2,3,4,5,6) : R-value for m1,..,m7 corelation with m8
 
-for i in range (1,31):
-    if i==4 or i==5 or i==8 or i==1 or i==2 or i==3:
-        session="ImageNet03"
+for i in range (1,7):    #subjects
+   if i==7 :
+        session="ImageNet04"
     else:
-        continue
+        session="ImageNet03"
     subject = f"sub-{i:02d}"
 
     
@@ -827,7 +827,7 @@ for i in range (1,31):
 R_data=np.array(R_data)
 Z_data = fisher_r_to_z(R_data)
 
-n_subjects, n_conditions = Z_data.shape
+n_subjects, n_conditions = Z_data.shape        #condition: size of subset
     
     
 cases = []
