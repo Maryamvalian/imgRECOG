@@ -1011,52 +1011,16 @@ for i in range (1,10):
 # %%
 animacy="inanim"
 model_dir="models/samesize"
-n_subject=5
-R_data = np.full(n_subject, np.nan)
 
+
+# %%
 def load_model(subset,subject,session):
     
     morphed_file = f"{model_dir}/M{subset}-4-{subject}-{session}-ncrf.pickle"
     inan, anim = load.unpickle(morphed_file)
     return inan, anim
 
-def fisher_r_to_z(r):
-    r = np.clip(r, -0.999999, 0.999999)  #avoid divid by zero when r=1 or -1
-    return 0.5 * np.log((1 + r) / (1 - r))
-
-#------------------------------------------
-
-for i in range (1,n_subject+1):
-    subject = f"sub-{i:02d}"
-    if i==7:
-        session="ImageNet04"
-    else:
-        session="ImageNet03"
-    inan1,anim1 = load_model(1,subject,session)
-    inan2,anim2 = load_model(2,subject,session)
-    m1=anim1 if animacy=="anim" else inan1
-    m2=anim2 if animacy=="anim" else inan2
-    d1 = np.asarray(m1.get_data()).reshape(-1)
-    d2 = np.asarray(m2.get_data()).reshape(-1)
-    r = np.corrcoef(d1, d2)[0, 1]
-    print(f"  {subject},Corr(m1,m2)={r.round(2)}, Fisher_z={fisher_r_to_z(r).round(2)}")
-    R_data[i-1] = r
-        
-
-Z_data = fisher_r_to_z(R_data)
-
-subjects = [f"sub-{i:02d}" for i in range(1, n_subject + 1)]
-ds = eb.Dataset({
-    'Subject': eb.Factor(subjects),
-    'Fisher_Z': Z_data
-})
-
-
-ttest = eb.test.TTestOneSample('Fisher_Z', data=ds, tail=1)
-print(ttest)
-
-
-# %%
+#-----------
 def corr_data(animacy, n_subject):
     
     R_data = np.full(n_subject, np.nan)
@@ -1086,11 +1050,13 @@ def corr_data(animacy, n_subject):
 
 
 # %%
+n_subject=6
 print("\n Animate:")
-R_data_anim, Z_data_anim = corr_data('anim', 5)
+R_data_anim, Z_data_anim = corr_data('anim', n_subject)
 print("\n Inanimate:")
-R_data_inanim, Z_data_inanim = corr_data('inan', 5)
+R_data_inanim, Z_data_inanim = corr_data('inan', n_subject)
 
+#ttest
 subjects = [f"sub-{i:02d}" for i in range(1, n_subject + 1)]
 ds = eb.Dataset({
     'Subject': eb.Factor(subjects),
@@ -1104,8 +1070,8 @@ ds_inanim = eb.Dataset({
 
 ttest = eb.test.TTestOneSample('Fisher_Z', data=ds, tail=1)
 print(f"Anim: \n {ttest}")
-ttest = eb.test.TTestOneSample('Fisher_Z', data=ds_inanim, tail=1)
-print(f"Inanim: \n {ttest}")
+ttest_inanim = eb.test.TTestOneSample('Fisher_Z', data=ds_inanim, tail=1)
+print(f"Inanim: \n {ttest_inanim}")
 
 # %% [markdown]
 # ## PLOT Correlation for Anim and Inanim
