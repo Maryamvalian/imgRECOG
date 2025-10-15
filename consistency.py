@@ -1009,11 +1009,10 @@ for i in range (1,10):
                 print(f"\n----------- Error processing {subject}: {e}\n")   
 
 # %%
-animacy="inanim"
 model_dir="models/samesize"
+n_subject=6
 
 
-# %%
 def load_model(subset,subject,session):
     
     morphed_file = f"{model_dir}/M{subset}-4-{subject}-{session}-ncrf.pickle"
@@ -1048,9 +1047,6 @@ def corr_data(animacy, n_subject):
     return R_data, Z_data
 
 
-
-# %%
-n_subject=6
 print("\n Animate:")
 R_data_anim, Z_data_anim = corr_data('anim', n_subject)
 print("\n Inanimate:")
@@ -1082,11 +1078,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-subjects = [f"sub-{i:02d}" for i in range(1, 6)]
+subjects = [f"sub-{i:02d}" for i in range(1, n_subject+1)]
 
 df = pd.DataFrame({
     'Subject': subjects * 2,
-    'Animacy': ['Animate'] * 5 + ['Inanimate'] * 5,
+    'Animacy': ['Animate'] * (n_subject) + ['Inanimate'] * (n_subject),
     'Corr': list(R_data_anim) + list(R_data_inanim)
 })
 
