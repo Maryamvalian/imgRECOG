@@ -1055,23 +1055,60 @@ ds = eb.Dataset({
 ttest = eb.test.TTestOneSample('Fisher_Z', data=ds, tail=1)
 print(ttest)
 
-# %%
-R_data_anim, Z_data_anim =R_data,Z_data
 
 # %%
-R_data_inanim, Z_data_inanim =R_data,Z_data
+def corr_data(animacy, n_subject):
+    
+    R_data = np.full(n_subject, np.nan)
+
+    def fisher_r_to_z(r):
+        r = np.clip(r, -0.999999, 0.999999)  # avoid infinities
+        return 0.5 * np.log((1 + r) / (1 - r))
+
+    for i in range(1, n_subject + 1):
+        subject = f"sub-{i:02d}"
+        session = "ImageNet04" if i == 7 else "ImageNet03"
+
+        inan1, anim1 = load_model(1, subject, session)
+        inan2, anim2 = load_model(2, subject, session)
+        m1= anim1 if animacy == "anim" else inan1
+        m2= anim2 if animacy == "anim" else inan2
+        d1= np.asarray(m1.get_data()).reshape(-1)
+        d2= np.asarray(m2.get_data()).reshape(-1)
+
+        r = np.corrcoef(d1, d2)[0, 1]
+        print(f"{subject}: Corr(m1,m2)={r:.2f}, Fisher_z={fisher_r_to_z(r):.2f}")
+        R_data[i - 1] = r
+
+    Z_data = fisher_r_to_z(R_data)
+    return R_data, Z_data
+
+
 
 # %%
-import matplotlib.pyplot as plt
+print("\n Animate:")
+R_data_anim, Z_data_anim = corr_data('anim', 5)
+print("\n Inanimate:")
+R_data_inanim, Z_data_inanim = corr_data('inan', 5)
 
-plt.figure(figsize=(5,4))
-plt.bar(subjects, R_data, color='skyblue', edgecolor='black',width=0.35)
-plt.axhline(0, color='k', linestyle='--', linewidth=1)
-plt.ylabel('Correlation (r)')
-plt.title('Model Consistency Across Subjects (Same-size Non-overlapping Data)')
-plt.tight_layout()
-plt.show()
+subjects = [f"sub-{i:02d}" for i in range(1, n_subject + 1)]
+ds = eb.Dataset({
+    'Subject': eb.Factor(subjects),
+    'Fisher_Z': Z_data_anim
+})
+ds_inanim = eb.Dataset({
+    'Subject': eb.Factor(subjects),
+    'Fisher_Z': Z_data_inanim
+})
 
+
+ttest = eb.test.TTestOneSample('Fisher_Z', data=ds, tail=1)
+print(f"Anim: \n {ttest}")
+ttest = eb.test.TTestOneSample('Fisher_Z', data=ds_inanim, tail=1)
+print(f"Inanim: \n {ttest}")
+
+# %% [markdown]
+# ## PLOT Correlation for Anim and Inanim
 
 # %%
 import pandas as pd
@@ -1084,22 +1121,22 @@ subjects = [f"sub-{i:02d}" for i in range(1, 6)]
 df = pd.DataFrame({
     'Subject': subjects * 2,
     'Animacy': ['Animate'] * 5 + ['Inanimate'] * 5,
-    'Fisher Z': list(Z_data_anim) + list(Z_data_inanim)
+    'Corr': list(R_data_anim) + list(R_data_inanim)
 })
 
 
 plt.figure(figsize=(7,4))
 sns.barplot(
     data=df,
-    x='Subject', y='Fisher Z',
+    x='Subject', y='Corr',
     hue='Animacy',
     palette={'Animate': '#66BB66', 'Inanimate': '#3399FF'},  # green + blue
     edgecolor='black',
     width=0.6
 )
 
-plt.ylabel('Fisher Z')
-plt.title('Model Consistency Across Subjects\n(Same-size Non-overlapping Data)')
+plt.ylabel('Pearson R')
+plt.title('Model Consistency Across Subjects\n(800 Trials, Non-overlapping Data)')
 plt.legend(title='Condition', loc='upper left')
 plt.tight_layout()
 plt.show()
