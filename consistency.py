@@ -1010,12 +1010,12 @@ for i in range (1,10):
 
 # %%
 model_dir="models/samesize"
-n_subject=6
+n_subject=7
+size=4
 
-
-def load_model(subset,subject,session):
+def load_model(subset,subject,session,size):
     
-    morphed_file = f"{model_dir}/M{subset}-4-{subject}-{session}-ncrf.pickle"
+    morphed_file = f"{model_dir}/M{subset}-{size}-{subject}-{session}-ncrf.pickle"
     inan, anim = load.unpickle(morphed_file)
     return inan, anim
 
@@ -1032,8 +1032,8 @@ def corr_data(animacy, n_subject):
         subject = f"sub-{i:02d}"
         session = "ImageNet04" if i == 7 else "ImageNet03"
 
-        inan1, anim1 = load_model(1, subject, session)
-        inan2, anim2 = load_model(2, subject, session)
+        inan1, anim1 = load_model(1, subject, session,size)
+        inan2, anim2 = load_model(2, subject, session,size)
         m1= anim1 if animacy == "anim" else inan1
         m2= anim2 if animacy == "anim" else inan2
         d1= np.asarray(m1.get_data()).reshape(-1)
@@ -1092,14 +1092,14 @@ sns.barplot(
     data=df,
     x='Subject', y='Corr',
     hue='Animacy',
-    palette={'Animate': '#66BB66', 'Inanimate': '#3399FF'},  # green + blue
+    palette={'Animate': '#66BB66', 'Inanimate': '#3399FF'},  
     edgecolor='black',
     width=0.6
 )
-
+plt.ylim(0, 1.0)
 plt.ylabel('Pearson R')
-plt.title('Model Consistency Across Subjects\n(800 Trials, Non-overlapping Data)')
-plt.legend(title='Condition', loc='upper left')
+plt.title('Model Consistency Across Subjects\n(1600 Trials, Non-overlapping Data)')
+plt.legend( loc='upper left')
 plt.tight_layout()
 plt.show()
 
