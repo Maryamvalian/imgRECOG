@@ -233,7 +233,7 @@ for i in range (1,10):                 #first 9 subjects
 #
 
 # %%
-subject="sub-08"
+subject="sub-09"
 session="ImageNet03"
 
 
@@ -600,7 +600,9 @@ plt.show()
 # # PEARSON R
 
 # %%
-animacy="inanim"
+subject="sub-01"
+session="ImageNet03"
+animacy="anim"
 
 anim_models = []
 inan_models = []
@@ -641,7 +643,8 @@ ax.set_title(f'{subject}- Correlation,  {animacy}  ')
 plt.tight_layout()
 plt.show()
 
-        
+print(corr_mat)        
+
 
 # %% [markdown]
 # # R2 Measure for each voxel 
@@ -790,8 +793,8 @@ animacy="anim"
 
 R_data = np.full((9,7), np.nan, dtype=float)             #subject* models (0,1,2,3,4,5,6) : R-value for m1,..,m7 corelation with m8
 
-for i in range (1,7):    #subjects
-   if i==7 :
+for i in range (1,10):    #subjects
+    if i==7 :
         session="ImageNet04"
     else:
         session="ImageNet03"
@@ -856,6 +859,250 @@ print(anova_results)
 
 # %%
 ds.tail()
+
+
+# %% [markdown]
+# # SECOND EXPERIMENT : STABILITY AT FIX SIZE
+# ## FIT NCRF
+
+# %%
+model_dir = "models/samesize"
+size=4
+for i in range (1,10):                 #first 9 subjects
+    if i==7 :
+        session="ImageNet04"
+    else:
+        session="ImageNet03"
+    subject = f"sub-{i:02d}"
+    
+    #FWD for Session
+    print(f"computing fwd for {subject}-{session}... ")
+    clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
+    clean = mne.io.read_raw_fif(clean_fif, preload=False,verbose=False)
+    info= clean.info           
+    meg_ndvar = load.fiff.raw_ndvar(clean)
+    sensor=meg_ndvar.sensor
+    fwd = compute_fwd_ndvar(subject, session,subjects_dir,info,sensor)
+    
+    subsets=[['08', '06', '05', '02'],['03','07', '01', '04']]
+    
+    for i in range (1,3):          
+        subset=subsets[i-1]
+        #print(f"{subset}")
+        modelfile = f"{model_dir}/{i}-{size}-{subject}-{session}-ncrf.pickle"
+        if os.path.exists(modelfile):
+            print(f"{i}-{size}-{subject}-{session} model file exists.")
+            continue
+        try:        
+            
+            meg_all = []
+            stim_all = []
+            for run in subset:
+                
+                print(f"Loading run-{run} MEG ...")
+                meg= load_meg_ndvar(subject, session, run)
+                meg_all.append(meg)
+                event_table= make_event_table(subject, session, run)
+                stim1,stim2= make_predictors_for_run(meg, event_table,mod=mod)
+                predictors=[stim1,stim2]
+                stim_all.append(predictors)  
+                
+            args = (meg_all , stim_all, fwd , noise_cov , 0,0.7)
+            kwargs = {'normalize': 'l1','in_place': False,'mu':'auto',
+                      'verbose': True,'n_iter': 10,'n_iterc': 10,'n_iterf': 100}        
+            model = fit_ncrf(*args, **kwargs)  
+            save.pickle(model, modelfile)
+            print(f"\nModel saved to {modelfile}\n")  
+            
+        except Exception as e:
+         print(f"\n----------- Error processing {subject}: {e}\n")   
+
+# %% [markdown]
+# ## Morph
+
+# %%
+model_dir="models/samesize"
+
+for i in range (1,10):
+    subject = f"sub-{i:02d}"
+    if i==7:
+        session="ImageNet04"
+    else:
+        session="ImageNet03"
+    for subset in range (1,3):
+        
+        morphed_file = f"{model_dir}/M{subset}-4-{subject}-{session}-ncrf.pickle"  #M stands for Morphed
+        if os.path.exists(morphed_file):
+            
+            print(f" {subset}-4-{subject}-{session} exists.")
+            #inanim, anim = load.unpickle(morphed_file)
+        else:
+            try:
+                    
+                print(f"Morphing {subset}-4-{subject}-{session}...")
+                modelfile = f"{model_dir}/{subset}-4-{subject}-{session}-ncrf.pickle"
+                model= load.unpickle(modelfile)
+                hlist = model.h
+                
+                if mod=="dummy":
+                    inanim = hlist[0]
+                    anim = hlist[1]
+                elif mod=="effect":
+                    h_mean,h_contrast = hlist[0],hlist[1]
+                    anim = h_mean+ h_contrast
+                    inanim = h_mean- h_contrast 
+                
+                elif mod=="ortho":
+                    h_mean,h_contrast= hlist[0],hlist[1]
+                    anim = h_mean+ code_anim* h_contrast
+                    inanim = h_mean+ code_inanim* h_contrast
+                
+                #morph  
+                fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
+                fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
+                
+                
+                stc_vec_anim = ndvar_merged_to_stc_lr(
+                    
+                    ndvar=anim,
+                    fwd=fwd,
+                    subject=subject,
+                    subjects_dir=subjects_dir,
+                    src_tag="vol-7",
+                )
+                stc_vec_inanim = ndvar_merged_to_stc_lr(
+                    
+                    ndvar=inanim,
+                    fwd=fwd,
+                    subject=subject,
+                    subjects_dir=subjects_dir,
+                    src_tag="vol-7",
+                )
+                
+                print("     1/2")        
+                an_L_fs, an_R_fs, anim_fs = morph_hemi(
+                    stc_vec_anim,
+                    subject=subject,
+                    subject_to="fsaverage2",
+                    subjects_dir=subjects_dir,
+                    src_tag="vol-7",
+                )
+                
+                print("     2/2")        
+                _, _, inanim_fs = morph_hemi(
+                    stc_vec_inanim,
+                    subject=subject,
+                    subject_to="fsaverage2",
+                    subjects_dir=subjects_dir,
+                    src_tag="vol-7",
+                )
+                               
+                
+                anim= anim_fs.smooth('source', 0.01, 'gaussian')
+                inanim= inanim_fs.smooth('source', 0.01, 'gaussian')
+                
+                save.pickle((inanim, anim), morphed_file)
+                print(f"\n{modelfile} Saved \n ")
+        
+            except Exception as e:
+                
+                print(f"\n----------- Error processing {subject}: {e}\n")   
+
+# %%
+animacy="inanim"
+model_dir="models/samesize"
+n_subject=5
+R_data = np.full(n_subject, np.nan)
+
+def load_model(subset,subject,session):
+    
+    morphed_file = f"{model_dir}/M{subset}-4-{subject}-{session}-ncrf.pickle"
+    inan, anim = load.unpickle(morphed_file)
+    return inan, anim
+
+def fisher_r_to_z(r):
+    r = np.clip(r, -0.999999, 0.999999)  #avoid divid by zero when r=1 or -1
+    return 0.5 * np.log((1 + r) / (1 - r))
+
+#------------------------------------------
+
+for i in range (1,n_subject+1):
+    subject = f"sub-{i:02d}"
+    if i==7:
+        session="ImageNet04"
+    else:
+        session="ImageNet03"
+    inan1,anim1 = load_model(1,subject,session)
+    inan2,anim2 = load_model(2,subject,session)
+    m1=anim1 if animacy=="anim" else inan1
+    m2=anim2 if animacy=="anim" else inan2
+    d1 = np.asarray(m1.get_data()).reshape(-1)
+    d2 = np.asarray(m2.get_data()).reshape(-1)
+    r = np.corrcoef(d1, d2)[0, 1]
+    print(f"  {subject},Corr(m1,m2)={r.round(2)}, Fisher_z={fisher_r_to_z(r).round(2)}")
+    R_data[i-1] = r
+        
+
+Z_data = fisher_r_to_z(R_data)
+
+subjects = [f"sub-{i:02d}" for i in range(1, n_subject + 1)]
+ds = eb.Dataset({
+    'Subject': eb.Factor(subjects),
+    'Fisher_Z': Z_data
+})
+
+
+ttest = eb.test.TTestOneSample('Fisher_Z', data=ds, tail=1)
+print(ttest)
+
+# %%
+R_data_anim, Z_data_anim =R_data,Z_data
+
+# %%
+R_data_inanim, Z_data_inanim =R_data,Z_data
+
+# %%
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(5,4))
+plt.bar(subjects, R_data, color='skyblue', edgecolor='black',width=0.35)
+plt.axhline(0, color='k', linestyle='--', linewidth=1)
+plt.ylabel('Correlation (r)')
+plt.title('Model Consistency Across Subjects (Same-size Non-overlapping Data)')
+plt.tight_layout()
+plt.show()
+
+
+# %%
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+subjects = [f"sub-{i:02d}" for i in range(1, 6)]
+
+df = pd.DataFrame({
+    'Subject': subjects * 2,
+    'Animacy': ['Animate'] * 5 + ['Inanimate'] * 5,
+    'Fisher Z': list(Z_data_anim) + list(Z_data_inanim)
+})
+
+
+plt.figure(figsize=(7,4))
+sns.barplot(
+    data=df,
+    x='Subject', y='Fisher Z',
+    hue='Animacy',
+    palette={'Animate': '#66BB66', 'Inanimate': '#3399FF'},  # green + blue
+    edgecolor='black',
+    width=0.6
+)
+
+plt.ylabel('Fisher Z')
+plt.title('Model Consistency Across Subjects\n(Same-size Non-overlapping Data)')
+plt.legend(title='Condition', loc='upper left')
+plt.tight_layout()
+plt.show()
 
 
 # %%
