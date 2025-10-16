@@ -319,9 +319,13 @@ for size in range (1,9):
 # # Plot morphed model
 
 # %%
-size=8
+size=4
+subject="sub-01"
+session="ImageNet03"
+model_dir="models/samesize"
 
-morphed_file = f"{model_dir}/M{size}-{subject}-{session}-ncrf.pickle"
+
+morphed_file = f"{model_dir}/M2-{size}-{subject}-{session}-ncrf.pickle"
 inan, an = load.unpickle(morphed_file)
 
 p = plot.Butterfly(an.norm('space'), color='k',title=f"Anim Size={size}")
@@ -781,15 +785,19 @@ plt.show()
 # # GROUP LEVEL
 
 # %%
+
+# %%
+animacy="anim"
+model_dir="models/consist"
+
+
 def load_model(size):
     
     morphed_file = f"{model_dir}/M{size}-{subject}-{session}-ncrf.pickle"
     inan, anim = load.unpickle(morphed_file)
     return inan, anim
 
-
-# %%
-animacy="anim"
+    
 
 R_data = np.full((9,7), np.nan, dtype=float)             #subject* models (0,1,2,3,4,5,6) : R-value for m1,..,m7 corelation with m8
 
@@ -841,17 +849,17 @@ for i in range(n_subjects):
        
         trial_size = f"{j+1}"
         z_score = Z_data[i, j]
-        cases.append([subject_id, trial_size, z_score])
+        cases.append([str(subject_id), trial_size, z_score])
 
 column_names = ['Subject','Trial_Size', 'Fisher_Z']
-ds = eb.Dataset.from_caselist(column_names, cases)
+ds = eb.Dataset.from_caselist(column_names, cases, random='Subject')
 print(ds.head())
 
 
 
 anova_results = eb.test.ANOVA(y='Fisher_Z',
-                              x='Trial_Size',  
-                              sub='Subject',   
+                              x='Trial_Size*Subject',  
+                                 
                               data=ds, 
                               title=" Trial Size Effect")
 print(anova_results)
@@ -1010,7 +1018,7 @@ for i in range (1,10):
 
 # %%
 model_dir="models/samesize"
-n_subject=7
+n_subject=9
 size=4
 
 def load_model(subset,subject,session,size):
@@ -1049,9 +1057,10 @@ def corr_data(animacy, n_subject):
 
 print("\n Animate:")
 R_data_anim, Z_data_anim = corr_data('anim', n_subject)
+print(f"Mean-R={R_data_anim.mean().round(3)}")
 print("\n Inanimate:")
 R_data_inanim, Z_data_inanim = corr_data('inan', n_subject)
-
+print(f"Mean-R={R_data_inanim.mean().round(3)}")
 #ttest
 subjects = [f"sub-{i:02d}" for i in range(1, n_subject + 1)]
 ds = eb.Dataset({
@@ -1094,12 +1103,13 @@ sns.barplot(
     hue='Animacy',
     palette={'Animate': '#66BB66', 'Inanimate': '#3399FF'},  
     edgecolor='black',
-    width=0.6
+    width=0.5
 )
 plt.ylim(0, 1.0)
 plt.ylabel('Pearson R')
-plt.title('Model Consistency Across Subjects\n(1600 Trials, Non-overlapping Data)')
-plt.legend( loc='upper left')
+plt.title('Model Stability\n(800 Trials(4 Runs), Non-overlapping Data)')
+plt.legend(bbox_to_anchor=(1.02, 1),loc='upper left')
+plt.grid(axis='y', linestyle='--', alpha=0.5)
 plt.tight_layout()
 plt.show()
 
