@@ -27,6 +27,7 @@ from pathlib import Path
 from Beyond import *
 import eelbrain as eb
 
+
 # %%
 mod="dummy"  #common, effect, dummy, ortho (effect with unbalanced trial counts)
 rewrite=True
@@ -233,9 +234,9 @@ for i in range (1,10):                 #first 9 subjects
 #
 
 # %%
-subject="sub-09"
-session="ImageNet03"
-
+subject="sub-07"
+session="ImageNet04"
+model_dir="models/consist"
 
 for size in range (1,9):
     
@@ -315,7 +316,7 @@ for size in range (1,9):
         except Exception as e:
             print(f"\n----------- Error processing {subject}: {e}\n")   
 
-# %% [markdown]
+# %% [markdown] jupyter={"source_hidden": true}
 # # Plot morphed model
 
 # %%
@@ -341,23 +342,7 @@ for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(inan.sub(time=t),title=f"{size}-{subject}{session}, inanim (NCRF), {t}ms") 
-#---------------------M2    
-morphed_file = f"{model_dir}/M2-{size}-{subject}-{session}-ncrf.pickle"
-inan, an = load.unpickle(morphed_file)
 
-p = plot.Butterfly(an.norm('space'), color='k',title=f"Anim Size={size}")
-times = [120,170,240,370,480]
-for t in times:
-    p.add_vline(t)
-for t in times:
-    f = plot.GlassBrain(an.sub(time=t),title=f"{size}-{subject}{session}, anim (NCRF), {t}ms") 
-    
-p = plot.Butterfly(inan.norm('space'), color='k',title=f" Inanim Size={size}")
-times = [120,170,240,370,480]
-for t in times:
-    p.add_vline(t)
-for t in times:
-    f = plot.GlassBrain(inan.sub(time=t),title=f"{size}-{subject}{session}, inanim (NCRF), {t}ms") 
 
 # %% [markdown]
 # # Save plot AW-COSINE SIMILARITY - all_paired
@@ -620,9 +605,19 @@ plt.show()
 # # PEARSON R
 
 # %%
-subject="sub-01"
-session="ImageNet03"
+len(anim_models)
+
+# %%
+subject="sub-07"
+session="ImageNet04"
 animacy="anim"
+model_dir="models/consist"
+def load_model(size):
+    
+    morphed_file = f"{model_dir}/M{size}-{subject}-{session}-ncrf.pickle"
+    inan, anim = load.unpickle(morphed_file)
+    return inan, anim
+#--------------    
 
 anim_models = []
 inan_models = []
@@ -634,7 +629,7 @@ for k in range(1,9):
         anim_models.append(anim)      
         
     except FileNotFoundError:
-        print("Load Model Failed!")
+        print(f"Load Model Failed! M{k}")
         
 models = anim_models if animacy == "inanim" else inan_models
 names = [f'M{i+1}' for i in range(len(models))]
@@ -890,9 +885,9 @@ ds.tail()
 # %%
 #TRIM MEG TO HALF SIZE (SHOULD TRIM MEG ONLY TRIMING STIM doesn't WORKS)
 model_dir = "models/samesize"
-size = 1
+size = 2
 
-for i in range (1,9):                 #first 9 subjects
+for i in range (1,10):                 #first 9 subjects
     if i==7 :
         session="ImageNet04"
     else:
@@ -912,9 +907,9 @@ for i in range (1,9):                 #first 9 subjects
     elif size == 1:
         subsets = [['02'],['08']]
     elif size == 2:
-        subsets=[['02' , '1'],['08' , '4']]
+        subsets=[['02' , '01'],['08' , '04']]
     elif size == 3:
-        subsets = [['02' , '1' , '3'],['07', '4' , '6']]
+        subsets = [['02' , '01' , '03'],['07', '04' , '06']]
         
     else:
         subsets=[['08', '06', '05', '02'],['03','07', '01', '04']]
@@ -960,7 +955,7 @@ for i in range (1,9):                 #first 9 subjects
                     meg_trim = meg.sub(time=(0, t_cut))
                     meg = meg_trim
 
-                meg_all.append(meg)     #meg or Trimed meg for 100 trials
+                meg_all.append(meg)     #meg or Trimed meg for less than one run
 
     
                 stim1,stim2= make_predictors_for_run(meg, event_table,mod=mod)
@@ -991,7 +986,7 @@ print(f"Inanimate trials: {n_inanim}")
 
 # %%
 model_dir="models/samesize"
-size=0.5
+size=2
 for i in range (1,10):
     subject = f"sub-{i:02d}"
     if i==7:
@@ -1194,13 +1189,11 @@ plt.show()
 model_dir = "models/samesize"
 n_subject = 9
 sizes = [0.25, 0.5, 1, 2, 4, 8]   # subset fractions
-trials_per_subset = 200
+trails_per_run = 200
 #------------------------
 
 results = []
-
 for size in sizes:
-    #print(f"\n=== Subset size {size} ===")
     R_anim, _ = corr_data("anim", n_subject, size)
     R_inanim, _ = corr_data("inanim", n_subject, size)
 
@@ -1208,21 +1201,21 @@ for size in sizes:
     mean_r_inan = np.nanmean( R_inanim)
 
     results.append({
-        "Subset Size": int(size * trials_per_subset),
+        "Subset Size": int(size * trails_per_run),
         "Animate": mean_r_anim,
         "Inanimate": mean_r_inan
     })
-
 
 df = pd.DataFrame(results)
 print("\nSummary:")
 print(df)
 
-# Melt for seaborn plotting
-df_melted = df.melt(id_vars="Subset Size", var_name="Animacy", value_name="Mean r")
+
 
 # ----------------------------------------
-# Plot
+# Melt for seaborn plotting
+df_melted = df.melt(id_vars="Subset Size", var_name="Animacy", value_name="Mean r")
+#plot
 plt.figure(figsize=(6, 4))
 sns.barplot(
     data=df_melted,
@@ -1239,5 +1232,77 @@ plt.legend(bbox_to_anchor=(1.02, 1), loc="upper left")
 plt.grid(axis="y", linestyle="--", alpha=0.5)
 plt.tight_layout()
 plt.show()
+
+# %% [markdown]
+# # Paired Test on Tiral size condition
+
+# %%
+model_dir = "models/samesize"
+n_subject = 9
+sizes = [0.25, 0.5, 1, 2, 4, 8]    
+trails_per_run = 200
+
+
+# --------------------
+def fisher_r_to_z(r):
+    r = np.clip(r, -0.999999, 0.999999)
+    return 0.5 * np.log((1 + r) / (1 - r))
+
+
+# --------------------
+
+all_R_anim = []
+all_R_inanim = []
+
+for size in sizes:
+   
+    R_anim, _ = corr_data("anim", n_subject, size)
+    R_inanim, _ = corr_data("inanim", n_subject, size)
+
+    all_R_anim.append(R_anim)
+    all_R_inanim.append(R_inanim)
+
+# Combine to [subjects × sizes]
+R_anim_all = np.column_stack(all_R_anim)
+R_inan_all = np.column_stack(all_R_inanim)
+
+
+Z_anim_all = fisher_r_to_z(R_anim_all)
+Z_inan_all = fisher_r_to_z(R_inan_all)
+
+subset_sizes = [int(size * trails_per_run) for size in sizes]                #size*200
+
+
+
+#Paired Test
+
+for j, size in enumerate(subset_sizes[:-1]):  # skip last (1600)
+    print(f"\n \nPaired ({size}, 1600)")
+
+    # Animate
+    ds_anim = eb.Dataset({
+        'Subject': [f"sub-{i+1:02d}" for i in range(n_subject)],
+        'Z1': Z_anim_all[:, j],
+        'Z2': Z_anim_all[:, -1]         #m8=1600
+    })
+    ds_anim['Diff'] = ds_anim['Z2'] - ds_anim['Z1']
+    ttest_anim = eb.test.ttest('Diff', data=ds_anim, tail=0)
+
+    # Inanimate
+    ds_inan = eb.Dataset({
+        'Subject': [f"sub-{i+1:02d}" for i in range(n_subject)],
+        'Z1': Z_inan_all[:, j],
+        'Z2': Z_inan_all[:, -1]
+    })
+    ds_inan['Diff'] = ds_inan['Z2'] - ds_inan['Z1']
+    ttest_inan = eb.test.ttest('Diff', data=ds_inan, tail=0)
+    
+    print(f"\n DataSet ANIM \n {ds_anim}")
+    print(f"Anim: \n {ttest_anim}")
+    print(f"Inanim: \n {ttest_inan}")
+    
+# --------------------
+#print(f"\n DataSet ANIM- pair {size},1600:\n {ds_anim}")
+
 
 # %%
