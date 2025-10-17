@@ -319,12 +319,29 @@ for size in range (1,9):
 # # Plot morphed model
 
 # %%
-size=4
-subject="sub-01"
+size=0.5
+subject="sub-03"
 session="ImageNet03"
 model_dir="models/samesize"
 
 
+morphed_file = f"{model_dir}/M1-{size}-{subject}-{session}-ncrf.pickle"
+inan, an = load.unpickle(morphed_file)
+
+p = plot.Butterfly(an.norm('space'), color='k',title=f"Anim Size={size}")
+times = [120,170,240,370,480]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(an.sub(time=t),title=f"{size}-{subject}{session}, anim (NCRF), {t}ms") 
+    
+p = plot.Butterfly(inan.norm('space'), color='k',title=f" Inanim Size={size}")
+times = [120,170,240,370,480]
+for t in times:
+    p.add_vline(t)
+for t in times:
+    f = plot.GlassBrain(inan.sub(time=t),title=f"{size}-{subject}{session}, inanim (NCRF), {t}ms") 
+#---------------------M2    
 morphed_file = f"{model_dir}/M2-{size}-{subject}-{session}-ncrf.pickle"
 inan, an = load.unpickle(morphed_file)
 
@@ -341,7 +358,6 @@ for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(inan.sub(time=t),title=f"{size}-{subject}{session}, inanim (NCRF), {t}ms") 
-
 
 # %% [markdown]
 # # Save plot AW-COSINE SIMILARITY - all_paired
@@ -784,7 +800,8 @@ plt.show()
 # %% [markdown]
 # # GROUP LEVEL
 
-# %%
+# %% [markdown]
+# ## Anova Test
 
 # %%
 animacy="anim"
@@ -851,15 +868,12 @@ for i in range(n_subjects):
         z_score = Z_data[i, j]
         cases.append([str(subject_id), trial_size, z_score])
 
-column_names = ['Subject','Trial_Size', 'Fisher_Z']
-ds = eb.Dataset.from_caselist(column_names, cases, random='Subject')
+
+ds = eb.Dataset.from_caselist(['Subject','Trial_Size', 'Fisher_Z'], cases, random='Subject')
 print(ds.head())
 
-
-
 anova_results = eb.test.ANOVA(y='Fisher_Z',
-                              x='Trial_Size*Subject',  
-                                 
+                              x='Trial_Size*Subject', 
                               data=ds, 
                               title=" Trial Size Effect")
 print(anova_results)
@@ -874,9 +888,11 @@ ds.tail()
 # ## FIT NCRF
 
 # %%
+#TRIM MEG TO HALF SIZE (SHOULD TRIM MEG ONLY TRIMING STIM doesn't WORKS)
 model_dir = "models/samesize"
-size=4
-for i in range (1,10):                 #first 9 subjects
+size = 1
+
+for i in range (1,9):                 #first 9 subjects
     if i==7 :
         session="ImageNet04"
     else:
@@ -884,33 +900,69 @@ for i in range (1,10):                 #first 9 subjects
     subject = f"sub-{i:02d}"
     
     #FWD for Session
-    print(f"computing fwd for {subject}-{session}... ")
+    
     clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
     clean = mne.io.read_raw_fif(clean_fif, preload=False,verbose=False)
     info= clean.info           
     meg_ndvar = load.fiff.raw_ndvar(clean)
     sensor=meg_ndvar.sensor
-    fwd = compute_fwd_ndvar(subject, session,subjects_dir,info,sensor)
     
-    subsets=[['08', '06', '05', '02'],['03','07', '01', '04']]
-    
-    for i in range (1,3):          
-        subset=subsets[i-1]
+    if size == 0.5 or size == 0.25:
+        subsets = [['08'],['03']]
+    elif size == 1:
+        subsets = [['02'],['08']]
+    elif size == 2:
+        subsets=[['02' , '1'],['08' , '4']]
+    elif size == 3:
+        subsets = [['02' , '1' , '3'],['07', '4' , '6']]
+        
+    else:
+        subsets=[['08', '06', '05', '02'],['03','07', '01', '04']]
+    keyfwd=True
+    for model in range (1,3):           #M1, M2
+        subset=subsets[model-1]
         #print(f"{subset}")
-        modelfile = f"{model_dir}/{i}-{size}-{subject}-{session}-ncrf.pickle"
+        modelfile = f"{model_dir}/{model}-{size}-{subject}-{session}-ncrf.pickle"
+        morphfile = f"{model_dir}/M{model}-{size}-{subject}-{session}-ncrf.pickle"
         if os.path.exists(modelfile):
-            print(f"{i}-{size}-{subject}-{session} model file exists.")
+            print(f"{model}-{size}-{subject}-{session} model file exists.")
+            continue
+        if os.path.exists(morphfile):
+            print(f"{model}-{size}-{subject}-{session} Morph file exists.")
             continue
         try:        
-            
+            if (keyfwd==True):
+                print(f"computing fwd for {subject}-{session}... ")
+                fwd = compute_fwd_ndvar(subject, session,subjects_dir,info,sensor)
+                keyfwd=False
             meg_all = []
             stim_all = []
             for run in subset:
                 
                 print(f"Loading run-{run} MEG ...")
                 meg= load_meg_ndvar(subject, session, run)
-                meg_all.append(meg)
+                #meg_all.append(meg)
                 event_table= make_event_table(subject, session, run)
+                #-----------half
+
+                event_table = event_table.sort_values(by='time').reset_index(drop=True)
+
+                cut = int(200 * size)
+
+                if size==0.5 or size==0.25:
+                    
+                    if len(event_table) > cut:
+                        event_table = event_table.iloc[:cut]
+                    else:
+                        print(f"failed event table")
+    
+                    t_cut = float(event_table.iloc[-1]['time']) 
+                    meg_trim = meg.sub(time=(0, t_cut))
+                    meg = meg_trim
+
+                meg_all.append(meg)     #meg or Trimed meg for 100 trials
+
+    
                 stim1,stim2= make_predictors_for_run(meg, event_table,mod=mod)
                 predictors=[stim1,stim2]
                 stim_all.append(predictors)  
@@ -923,14 +975,23 @@ for i in range (1,10):                 #first 9 subjects
             print(f"\nModel saved to {modelfile}\n")  
             
         except Exception as e:
-         print(f"\n----------- Error processing {subject}: {e}\n")   
+         print(f"\n----------- Error processing {subject}: {e}\n")  
+
+# %%
+n_anim = event_table['animate'].sum()          # True values = animate trials
+n_inanim = (~event_table['animate']).sum()     # False values = inanimate trials
+n_total = len(event_table)
+
+print(f"Total trials: {n_total}")
+print(f"Animate trials: {n_anim}")
+print(f"Inanimate trials: {n_inanim}")
 
 # %% [markdown]
 # ## Morph
 
 # %%
 model_dir="models/samesize"
-
+size=0.5
 for i in range (1,10):
     subject = f"sub-{i:02d}"
     if i==7:
@@ -939,16 +1000,16 @@ for i in range (1,10):
         session="ImageNet03"
     for subset in range (1,3):
         
-        morphed_file = f"{model_dir}/M{subset}-4-{subject}-{session}-ncrf.pickle"  #M stands for Morphed
+        morphed_file = f"{model_dir}/M{subset}-{size}-{subject}-{session}-ncrf.pickle"  #M stands for Morphed
         if os.path.exists(morphed_file):
             
-            print(f" {subset}-4-{subject}-{session} exists.")
+            print(f" {subset}-{size}-{subject}-{session} exists.")
             #inanim, anim = load.unpickle(morphed_file)
         else:
             try:
                     
-                print(f"Morphing {subset}-4-{subject}-{session}...")
-                modelfile = f"{model_dir}/{subset}-4-{subject}-{session}-ncrf.pickle"
+                print(f"Morphing {subset}-{size}-{subject}-{session}...")
+                modelfile = f"{model_dir}/{subset}-{size}-{subject}-{session}-ncrf.pickle"
                 model= load.unpickle(modelfile)
                 hlist = model.h
                 
@@ -1016,10 +1077,13 @@ for i in range (1,10):
                 
                 print(f"\n----------- Error processing {subject}: {e}\n")   
 
+# %% [markdown]
+# # R_Data from morphed files
+
 # %%
 model_dir="models/samesize"
-n_subject=9
-size=4
+n_subject=9                  #Loop sub-01,sub-02,...,sub-n_subjects
+size=0.25
 
 def load_model(subset,subject,session,size):
     
@@ -1028,7 +1092,7 @@ def load_model(subset,subject,session,size):
     return inan, anim
 
 #-----------
-def corr_data(animacy, n_subject):
+def corr_data(animacy, n_subject,size):
     
     R_data = np.full(n_subject, np.nan)
 
@@ -1040,28 +1104,36 @@ def corr_data(animacy, n_subject):
         subject = f"sub-{i:02d}"
         session = "ImageNet04" if i == 7 else "ImageNet03"
 
-        inan1, anim1 = load_model(1, subject, session,size)
-        inan2, anim2 = load_model(2, subject, session,size)
-        m1= anim1 if animacy == "anim" else inan1
-        m2= anim2 if animacy == "anim" else inan2
-        d1= np.asarray(m1.get_data()).reshape(-1)
-        d2= np.asarray(m2.get_data()).reshape(-1)
-
-        r = np.corrcoef(d1, d2)[0, 1]
-        print(f"{subject}: Corr(m1,m2)={r:.2f}, Fisher_z={fisher_r_to_z(r):.2f}")
-        R_data[i - 1] = r
+        try:
+                
+    
+            inan1, anim1 = load_model(1, subject, session,size)
+            inan2, anim2 = load_model(2, subject, session,size)
+            m1= anim1 if animacy == "anim" else inan1
+            m2= anim2 if animacy == "anim" else inan2
+            d1= np.asarray(m1.get_data()).reshape(-1)
+            d2= np.asarray(m2.get_data()).reshape(-1)
+    
+            r = np.corrcoef(d1, d2)[0, 1]
+            #print(f"{subject}: Corr(m1,m2)={r:.2f}, Fisher_z={fisher_r_to_z(r):.2f}")
+            R_data[i - 1] = r
+        except Exception as e:
+            print(f"failed: {e}")
 
     Z_data = fisher_r_to_z(R_data)
     return R_data, Z_data
 
-
+#------------------------------------------
 print("\n Animate:")
-R_data_anim, Z_data_anim = corr_data('anim', n_subject)
+R_data_anim, Z_data_anim = corr_data('anim', n_subject,size)
 print(f"Mean-R={R_data_anim.mean().round(3)}")
 print("\n Inanimate:")
-R_data_inanim, Z_data_inanim = corr_data('inan', n_subject)
+R_data_inanim, Z_data_inanim = corr_data('inan', n_subject,size)
 print(f"Mean-R={R_data_inanim.mean().round(3)}")
+
+
 #ttest
+"""
 subjects = [f"sub-{i:02d}" for i in range(1, n_subject + 1)]
 ds = eb.Dataset({
     'Subject': eb.Factor(subjects),
@@ -1077,9 +1149,13 @@ ttest = eb.test.TTestOneSample('Fisher_Z', data=ds, tail=1)
 print(f"Anim: \n {ttest}")
 ttest_inanim = eb.test.TTestOneSample('Fisher_Z', data=ds_inanim, tail=1)
 print(f"Inanim: \n {ttest_inanim}")
+"""
 
 # %% [markdown]
 # ## PLOT Correlation for Anim and Inanim
+
+# %% [markdown]
+# size 2:   anim= 0.801       , inanim=0.83
 
 # %%
 import pandas as pd
@@ -1107,11 +1183,61 @@ sns.barplot(
 )
 plt.ylim(0, 1.0)
 plt.ylabel('Pearson R')
-plt.title('Model Stability\n(800 Trials(4 Runs), Non-overlapping Data)')
+plt.title(f'Model Stability\n({int(size*200)} Trials, Non-overlapping Data)')
 plt.legend(bbox_to_anchor=(1.02, 1),loc='upper left')
 plt.grid(axis='y', linestyle='--', alpha=0.5)
 plt.tight_layout()
 plt.show()
 
+
+# %%
+model_dir = "models/samesize"
+n_subject = 9
+sizes = [0.25, 0.5, 1, 2, 4, 8]   # subset fractions
+trials_per_subset = 200
+#------------------------
+
+results = []
+
+for size in sizes:
+    #print(f"\n=== Subset size {size} ===")
+    R_anim, _ = corr_data("anim", n_subject, size)
+    R_inanim, _ = corr_data("inanim", n_subject, size)
+
+    mean_r_anim = np.nanmean ( R_anim)
+    mean_r_inan = np.nanmean( R_inanim)
+
+    results.append({
+        "Subset Size": int(size * trials_per_subset),
+        "Animate": mean_r_anim,
+        "Inanimate": mean_r_inan
+    })
+
+
+df = pd.DataFrame(results)
+print("\nSummary:")
+print(df)
+
+# Melt for seaborn plotting
+df_melted = df.melt(id_vars="Subset Size", var_name="Animacy", value_name="Mean r")
+
+# ----------------------------------------
+# Plot
+plt.figure(figsize=(6, 4))
+sns.barplot(
+    data=df_melted,
+    x="Subset Size", y="Mean r",
+    hue="Animacy",
+    palette={"Animate": "#66BB66", "Inanimate": "#3399FF"},
+    edgecolor="black", width=0.5
+)
+
+plt.ylim(0, 1.0)
+plt.ylabel("Mean Pearson r")
+plt.title("Model Consistency Across Subset Sizes")
+plt.legend(bbox_to_anchor=(1.02, 1), loc="upper left")
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.show()
 
 # %%
