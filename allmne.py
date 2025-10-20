@@ -366,9 +366,18 @@ for t in times:
 
 # %%
 root_epochs = Path("/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/epochs")
-size=1
+size=4
 per_run=200
 cut_per_cond=int(size * per_run/2)
+#----------
+def resize_epochs(epochs, n):
+    #for balancing the condition trial#
+    if len(epochs) >= n:
+        return epochs[:n]
+    else:
+        idx = np.random.choice(len(epochs), n, replace=True)
+        return epochs[idx]
+#--------------------
 
 
 for i in range(1, 10):
@@ -382,12 +391,12 @@ for i in range(1, 10):
     epo_file = root_epochs / f"{subject}_meg_epo.fif"
     clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
 
-    subsets=[["02","01"],["08","04"]]
+    subsets=[["08","06","05","02"],["03","07","01","04"]]
     for model in range (1,3):       #M1,M2
         
         subset=subsets[model-1]
-        run1=subset[0]
-        run2=subset[1]
+        run_list = [int(r) for r in subset]
+        
         modelfile = f"models/samesize/mne/{model}-{size}-{subject}-{session}-mne.pickle"
     
         if os.path.exists(modelfile):
@@ -409,23 +418,24 @@ for i in range(1, 10):
             mask_in = (
                 (meta["subject"] == i) &
                 (meta["session"] == session) &   
-                ((meta["run"] == int(run1)) | (meta["run"] == int(run2))) &          #(meta["run"] == int(run))&
+                (meta["run"].isin(run_list)) &           #(meta["run"] == int(run))&
                 (meta["stim_is_animate"] ==False)
             )
 
             mask_an = (
                 (meta["subject"]== i) &
                 (meta["session"]== session) & 
-                ((meta["run"] == int(run1)) | (meta["run"] == int(run2))) &
+                (meta["run"].isin(run_list)) & 
                 (meta["stim_is_animate"] ==True)
             )
         
-            epochs_in = epochs_resamp[mask_in]
-            epochs_an = epochs_resamp[mask_an]
+            #epochs_in = epochs_resamp[mask_in]
+            #epochs_an = epochs_resamp[mask_an]
+            print("Balancing trials ")
+            epochs_an = resize_epochs(epochs_resamp[mask_an], cut_per_cond)
+            epochs_in = resize_epochs(epochs_resamp[mask_in], cut_per_cond)
 
-            if size<9: #all should cut to balanced
-                epochs_in = epochs_in[:cut_per_cond]
-                epochs_an = epochs_an[:cut_per_cond]
+            
             
             print(f"#Animate={len(epochs_an)}")
             print(f"#Inanim={len(epochs_in)}")
@@ -492,7 +502,7 @@ for i in range(1, 10):
 # %%
 model_dir="models/samesize/mne"
 n_subject=9                  #Loop sub-01,sub-02,...,sub-n_subjects
-size=1
+size=2
 
 def load_model_subset(subset,subject,session,size):
     
@@ -560,7 +570,7 @@ sns.barplot(
 )
 plt.ylim(0, 1.0)
 plt.ylabel('Pearson R')
-plt.title(f'Model Stability\n({int(size*200)} Trials, Non-overlapping Balanced Data)')
+plt.title(f'MNE\n({int(size*200)} Trials, Non-overlapping Balanced Data)')
 plt.legend(bbox_to_anchor=(1.02, 1),loc='upper left')
 plt.grid(axis='y', linestyle='--', alpha=0.5)
 plt.tight_layout()
@@ -569,7 +579,7 @@ plt.show()
 # %%
 model_dir = "models/samesize/mne"
 n_subject = 9
-sizes = [0.25, 0.5, 1, 8]   
+sizes = [0.25, 0.5, 1, 2,  3, 8]   
 trials_per_subset = 200
 #------------------------
 
@@ -608,7 +618,7 @@ sns.barplot(
 
 plt.ylim(0, 1.0)
 plt.ylabel("Mean Pearson r")
-plt.title("Model Consistency Across Subset Sizes")
+plt.title("MNE Model Consistency Across Subset Sizes")
 plt.legend(bbox_to_anchor=(1.02, 1), loc="upper left")
 plt.grid(axis="y", linestyle="--", alpha=0.5)
 plt.tight_layout()
