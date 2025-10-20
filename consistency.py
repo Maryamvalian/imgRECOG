@@ -885,7 +885,7 @@ ds.tail()
 # %%
 #TRIM MEG TO HALF SIZE (SHOULD TRIM MEG ONLY TRIMING STIM doesn't WORKS)
 model_dir = "models/samesize"
-size = 2
+size = 3
 
 for i in range (1,10):                 #first 9 subjects
     if i==7 :
@@ -909,7 +909,7 @@ for i in range (1,10):                 #first 9 subjects
     elif size == 2:
         subsets=[['02' , '01'],['08' , '04']]
     elif size == 3:
-        subsets = [['02' , '01' , '03'],['07', '04' , '06']]
+        subsets = [['02' , '01' , '03'],['07', '04' , '08']]
         
     else:
         subsets=[['08', '06', '05', '02'],['03','07', '01', '04']]
@@ -986,7 +986,7 @@ print(f"Inanimate trials: {n_inanim}")
 
 # %%
 model_dir="models/samesize"
-size=2
+size=3
 for i in range (1,10):
     subject = f"sub-{i:02d}"
     if i==7:
@@ -1078,9 +1078,9 @@ for i in range (1,10):
 # %%
 model_dir="models/samesize"
 n_subject=9                  #Loop sub-01,sub-02,...,sub-n_subjects
-size=0.25
+size=3
 
-def load_model(subset,subject,session,size):
+def load_model_subset(subset,subject,session,size):
     
     morphed_file = f"{model_dir}/M{subset}-{size}-{subject}-{session}-ncrf.pickle"
     inan, anim = load.unpickle(morphed_file)
@@ -1102,8 +1102,8 @@ def corr_data(animacy, n_subject,size):
         try:
                 
     
-            inan1, anim1 = load_model(1, subject, session,size)
-            inan2, anim2 = load_model(2, subject, session,size)
+            inan1, anim1 = load_model_subset(1, subject, session,size)
+            inan2, anim2 = load_model_subset(2, subject, session,size)
             m1= anim1 if animacy == "anim" else inan1
             m2= anim2 if animacy == "anim" else inan2
             d1= np.asarray(m1.get_data()).reshape(-1)
@@ -1119,41 +1119,7 @@ def corr_data(animacy, n_subject,size):
     return R_data, Z_data
 
 #------------------------------------------
-print("\n Animate:")
-R_data_anim, Z_data_anim = corr_data('anim', n_subject,size)
-print(f"Mean-R={R_data_anim.mean().round(3)}")
-print("\n Inanimate:")
-R_data_inanim, Z_data_inanim = corr_data('inan', n_subject,size)
-print(f"Mean-R={R_data_inanim.mean().round(3)}")
 
-
-#ttest
-"""
-subjects = [f"sub-{i:02d}" for i in range(1, n_subject + 1)]
-ds = eb.Dataset({
-    'Subject': eb.Factor(subjects),
-    'Fisher_Z': Z_data_anim
-})
-ds_inanim = eb.Dataset({
-    'Subject': eb.Factor(subjects),
-    'Fisher_Z': Z_data_inanim
-})
-
-
-ttest = eb.test.TTestOneSample('Fisher_Z', data=ds, tail=1)
-print(f"Anim: \n {ttest}")
-ttest_inanim = eb.test.TTestOneSample('Fisher_Z', data=ds_inanim, tail=1)
-print(f"Inanim: \n {ttest_inanim}")
-"""
-
-# %% [markdown]
-# ## PLOT Correlation for Anim and Inanim
-
-# %% [markdown]
-# size 2:   anim= 0.801       , inanim=0.83
-
-# %%
-import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -1185,11 +1151,14 @@ plt.tight_layout()
 plt.show()
 
 
+# %% [markdown]
+# # TRail size data set
+
 # %%
 model_dir = "models/samesize"
 n_subject = 9
-sizes = [0.25, 0.5, 1, 2, 4, 8]   # subset fractions
-trails_per_run = 200
+sizes = [0.25, 0.5, 1, 2, ,3, 4, 8]   
+trials_per_subset = 200
 #------------------------
 
 results = []
@@ -1201,7 +1170,7 @@ for size in sizes:
     mean_r_inan = np.nanmean( R_inanim)
 
     results.append({
-        "Subset Size": int(size * trails_per_run),
+        "Subset Size": int(size * trials_per_subset),
         "Animate": mean_r_anim,
         "Inanimate": mean_r_inan
     })
@@ -1262,7 +1231,7 @@ for size in sizes:
     all_R_anim.append(R_anim)
     all_R_inanim.append(R_inanim)
 
-# Combine to [subjects × sizes]
+#convert 1D array to 2D (rows: subjects, column: sizes
 R_anim_all = np.column_stack(all_R_anim)
 R_inan_all = np.column_stack(all_R_inanim)
 
@@ -1274,12 +1243,12 @@ subset_sizes = [int(size * trails_per_run) for size in sizes]                #si
 
 
 
-#Paired Test
+#Paired Test 
+#Pairs : (50,1600)(100,1600)...(800,1600)
 
-for j, size in enumerate(subset_sizes[:-1]):  # skip last (1600)
+for j, size in enumerate(subset_sizes[:-1]):  #skip 1600
     print(f"\n \nPaired ({size}, 1600)")
 
-    # Animate
     ds_anim = eb.Dataset({
         'Subject': [f"sub-{i+1:02d}" for i in range(n_subject)],
         'Z1': Z_anim_all[:, j],
@@ -1288,7 +1257,6 @@ for j, size in enumerate(subset_sizes[:-1]):  # skip last (1600)
     ds_anim['Diff'] = ds_anim['Z2'] - ds_anim['Z1']
     ttest_anim = eb.test.ttest('Diff', data=ds_anim, tail=0)
 
-    # Inanimate
     ds_inan = eb.Dataset({
         'Subject': [f"sub-{i+1:02d}" for i in range(n_subject)],
         'Z1': Z_inan_all[:, j],
@@ -1297,12 +1265,10 @@ for j, size in enumerate(subset_sizes[:-1]):  # skip last (1600)
     ds_inan['Diff'] = ds_inan['Z2'] - ds_inan['Z1']
     ttest_inan = eb.test.ttest('Diff', data=ds_inan, tail=0)
     
-    print(f"\n DataSet ANIM \n {ds_anim}")
+    #print(f"\n DataSet ANIM \n {ds_anim}")
     print(f"Anim: \n {ttest_anim}")
     print(f"Inanim: \n {ttest_inan}")
     
-# --------------------
-#print(f"\n DataSet ANIM- pair {size},1600:\n {ds_anim}")
 
 
 # %%
