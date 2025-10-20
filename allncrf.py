@@ -401,8 +401,11 @@ for i in range(1, 31):
         sessions=["ImageNet01"]
         lastruns = [5]                     #run01,run02,..,run05   
     else:
-        sessions=["ImageNet01", "ImageNet02","ImageNet03","ImageNet04"]
-        lastruns=[2,2,8,8]
+        #sessions=["ImageNet01", "ImageNet02","ImageNet03","ImageNet04"]
+        #lastruns=[2,2,8,8]
+        #Only session 3,4 we can not average diff size ncrf so we keep 3,4 : 
+        sessions=["ImageNet03","ImageNet04"]
+        lastruns=[8,8]
     
     subject = f"sub-{i:02d}"
     for idx, session in enumerate(sessions):
@@ -508,13 +511,13 @@ res = testnd.VectorDifferenceRelated(
     'inanimate',     
     'animate',   
     match='subject',     
-    data=data,     
+    data=data_avg,     
     tfce=True,           
     tstart=100,                           #ms not second, out put of ncrf 
     tstop=700,
     samples=1000
 )
-save.pickle(res, f"Tests/all_runs/all_{mod}-ncrf_PT.pickle")
+#save.pickle(res, f"Tests/all_runs/allruns-ncrf_PT.pickle")
 
 # %%
 diff= res.masked_difference()
