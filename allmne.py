@@ -53,9 +53,11 @@ fwd_dir.mkdir(parents=True, exist_ok=True)
 
 for i in range(1, 31):
     if (i<10):
-        session="ImageNet03"            #"ImageNet03,04" 
+        session="ImageNet04"            #"ImageNet03,04" 
+        balanced_size=800                #all runs=8*200=1600 trail each cond 800
     else:
         session="ImageNet01"
+        balanced_size=500
     
     subject = f"sub-{i:02d}"
     
@@ -82,6 +84,10 @@ for i in range(1, 31):
         
         epochs_resamp = epochs.copy().resample(100, npad="auto", verbose=False)
         meta = epochs_resamp.metadata
+
+        #sub-03 meta data is not boolean convert to boolean 
+        if i==3:
+            meta["stim_is_animate"] = meta["stim_is_animate"].apply(lambda x: True if str(x).lower() == "true" else False)
     
             
         mask_in = (
@@ -100,23 +106,21 @@ for i in range(1, 31):
             (meta["stim_is_animate"] ==True)
         )
     
-        epochs_an = epochs_resamp[mask_an]
+        #epochs_an = epochs_resamp[mask_an]
         print(f"#Animate={len(epochs_an)}")
 
-        """
-        mask_common = (
-            (meta["subject"] == i) &
-            (meta["session"] == session) &
-            (meta["run"] == int(run))
-            
-        )
-    
-        epochs_common = epochs_resamp[mask_an]
-        """
+        print(f"Balancing trials ")
+        epochs_an = resize_epochs(epochs_resamp[mask_an], balanced_size) 
+        epochs_in = resize_epochs(epochs_resamp[mask_in], balanced_size)
+
+        print(f"Blanced #Animate={len(epochs_an)}")
+        print(f"Balanced #Inanimate={len(epochs_in)}")
+
+
 
         evoked_anim= epochs_an.average()
         evoked_inanim = epochs_in.average()
-        #evoked_common= epochs_common.average()
+        
 
                
         #src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"          #merged L,R same as ncrf
@@ -135,20 +139,7 @@ for i in range(1, 31):
                 meg=True, eeg=False, mindist=0, verbose=False
             )
     
-        """
-        if fwd_file.exists() and not(rewrite):
-            print("    Loading FWD ")
-            fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
-        else:
-            print("   Computing FWD...")
-            fwd = mne.make_forward_solution(
-                clean.info, trans, src, bem_sol,
-                meg=True, eeg=False, mindist=0, verbose=False
-            )
-            mne.write_forward_solution(str(fwd_file), fwd, overwrite=True, verbose=False)
-            print(f"      Saved FWD to {fwd_file}")
-        """
-        
+             
         print("   Inverse...")
         inv = mne.minimum_norm.make_inverse_operator(
             info=clean.info,
@@ -170,7 +161,7 @@ for i in range(1, 31):
         stc_inan_vec = mne.minimum_norm.apply_inverse(
             evoked_inanim, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False)
 
-        #stc_common_vec = mne.minimum_norm.apply_inverse(evoked_common, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False)
+        
         
         
         print(f"Morphing ...")
@@ -180,56 +171,7 @@ for i in range(1, 31):
         print("   morphing 2/2")
         R_in,L_in,inan = morph_hemi(stc_inan_vec, subject=subject, subject_to="fsaverage2",
                               subjects_dir=subjects_dir, src_tag="vol-7")
-        """
-        if src_type=="wholeBrain":
-            src_fs2 = mne.read_source_spaces(f"{subjects_dir}/fsaverage2/bem/fsaverage2-vol-7-src.fif",verbose=False)
-            src_from=fwd['src'] # <==========When mismatch between src and fwd
-            
-            morph = mne.compute_source_morph(
-                
-                src=src_from, # <===========
-                subject_from=subject,
-                subject_to="fsaverage2",     
-                subjects_dir=subjects_dir,
-                spacing=7.0, 
-                src_to=src_fs2,                                     
-                precompute=True,
-                verbose=False,
-            )
-            stc_anim_vec_fs = morph.apply(stc_anim_vec)
-                        
-            print(f"   Morphing 2/2")
-           
-            stc_inan_vec_fs = morph.apply(stc_inan_vec)
-            
-            inan = load.mne.stc_ndvar(
-                stc_inan_vec_fs,
-                src='vol-7',                  
-                subjects_dir=subjects_dir,
-                subject='fsaverage2')
-            anim = load.mne.stc_ndvar(
-                stc_anim_vec_fs,
-                src='vol-7',                  
-                subjects_dir=subjects_dir,
-                subject='fsaverage2')
-            
-        elif src_type=="cortex":
-            
-            if mod=="common":
-                
-                print("    morphing 1/1")
-                R,L,common = morph_hemi(stc_common_vec, subject=subject, subject_to="fsaverage2",
-                                  subjects_dir=subjects_dir, src_tag="vol-7")
-                save.pickle(common, modelfile)
-            else:
-                
-                print("   morphing 1/2")
-                R,L,anim = morph_hemi(stc_anim_vec, subject=subject, subject_to="fsaverage2",
-                              subjects_dir=subjects_dir, src_tag="vol-7")
-                print("   morphing 2/2")
-                R_in,L_in,inan = morph_hemi(stc_inan_vec, subject=subject, subject_to="fsaverage2",
-                              subjects_dir=subjects_dir, src_tag="vol-7")
-        """
+        
         save.pickle((inan,anim), modelfile)
                   
         
@@ -286,7 +228,7 @@ res = testnd.VectorDifferenceRelated(
     tstop=0.7,
     samples=1000
 )
-#save.pickle(res, "Tests/mne/mne_paired_test.pickle")
+save.pickle(res, "Tests/mne/all_runs_mne_PT.pickle")
 
 # %%
 diff= res.masked_difference()
@@ -303,13 +245,13 @@ for t in times:
 #
 
 # %%
-data_inan = data.sub("animacy == 'inanimate'")
+data_inan = data_avg.sub("animacy == 'inanimate'")
 result_inan = testnd.Vector('stc', match='subject', data=data_inan, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
 
-data_an = data.sub("animacy == 'animate'")
+data_an = data_avg.sub("animacy == 'animate'")
 result_an = testnd.Vector('stc', match='subject', data=data_an, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
 
-save.pickle((result_an,result_inan), "Tests/mne/mne_1sampletest.pickle")
+save.pickle((result_an,result_inan), "Tests/mne/all_runs-mne_1ST.pickle")
 
 # %%
 p = plot.Butterfly(result_inan.masked_difference().norm('space'), color='k')
@@ -330,6 +272,7 @@ for t in times:
 # # COMMON RESPONSE
 
 # %%
+"""
 mod=="common"
 cases = []
 for i in range(1, 31):
@@ -348,30 +291,34 @@ for i in range(1, 31):
     
 data_common= Dataset.from_caselist(['subject', 'stc'], cases)
 data_common.head()
+"""
 
 # %%
-result_common = testnd.Vector('stc', match='subject', data=data_common, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
+#result_common = testnd.Vector('stc', match='subject', data=data_common, tfce=True, tstart=0.1, tstop=0.6,samples=1000)
 
 
 # %%
-p = plot.Butterfly(result_common.masked_difference().norm('space'), color='k')
+"""p = plot.Butterfly(result_common.masked_difference().norm('space'), color='k')
 times = [0.13,0.25,0.35,0.45]
 for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(result_common.masked_difference().sub(time=t),title=f"common MNE, {t}s") 
+"""
 
 # %% [markdown]
-# # CONSISTENCY MAKE MODELS FOR DIFFERENT SIZE MEG
+# # CONSISTENCY MAKE MODELS FOR DIFFERENT SIZE MEG 
+# ## BALANCED DATA
 
 # %%
 root_epochs = Path("/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/epochs")
-size=4
+size=6
 per_run=200
 cut_per_cond=int(size * per_run/2)
 #----------
 def resize_epochs(epochs, n):
     #for balancing the condition trial#
+    
     if len(epochs) >= n:
         return epochs[:n]
     else:
@@ -391,7 +338,21 @@ for i in range(1, 10):
     epo_file = root_epochs / f"{subject}_meg_epo.fif"
     clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
 
-    subsets=[["08","06","05","02"],["03","07","01","04"]]
+    if size== 8:
+        subsets=[["08", "06", "05", "02", "01", "03", "04", "07"],["08", "06", "05", "02", "01", "03", "04", "07"]]
+    elif size==6: 
+        subsets= [["08", "06", "05", "02", "01", "03"],["08", "06", "05", "02", "01", "03"]]
+    elif size==4:
+        subsets=[["08", "06", "05", "02"],["03", "07", "01", "04"]]
+    elif size==3:
+        subsets=[["02", "01", "03"],["07", "04", "06"]]
+    elif size==2:
+        subsets=[["02", "01"],["08", "04"]]
+    elif size==1:
+        subsets=[["02"], ["08"]]
+    else:
+        subsets=[["08"],["03"]]    #size 0.5, 0.25
+        
     for model in range (1,3):       #M1,M2
         
         subset=subsets[model-1]
@@ -429,7 +390,7 @@ for i in range(1, 10):
                 (meta["stim_is_animate"] ==True)
             )
         
-            #epochs_in = epochs_resamp[mask_in]
+            #epochs_in = epochs_resamp[mask_in] # Not balancing
             #epochs_an = epochs_resamp[mask_an]
             print("Balancing trials ")
             epochs_an = resize_epochs(epochs_resamp[mask_an], cut_per_cond)
@@ -502,7 +463,7 @@ for i in range(1, 10):
 # %%
 model_dir="models/samesize/mne"
 n_subject=9                  #Loop sub-01,sub-02,...,sub-n_subjects
-size=2
+size=6
 
 def load_model_subset(subset,subject,session,size):
     
@@ -521,7 +482,7 @@ def corr_data(animacy, n_subject,size):
 
     for i in range(1, n_subject + 1):
         subject = f"sub-{i:02d}"
-        #session = "ImageNet04" if i == 7 else "ImageNet03"
+        #session = "ImageNet04" if i == 7 else "ImageNet03" - renamed model to imagenet03 even 04
         session="ImageNet03"
 
         try:
@@ -577,9 +538,11 @@ plt.tight_layout()
 plt.show()
 
 # %%
+
+# %%
 model_dir = "models/samesize/mne"
 n_subject = 9
-sizes = [0.25, 0.5, 1, 2,  3, 8]   
+sizes = [0.25, 0.5, 1, 2,  3, 4, 6, 8]   
 trials_per_subset = 200
 #------------------------
 
@@ -618,7 +581,7 @@ sns.barplot(
 
 plt.ylim(0, 1.0)
 plt.ylabel("Mean Pearson r")
-plt.title("MNE Model Consistency Across Subset Sizes")
+plt.title("MNE Model Consistency ")
 plt.legend(bbox_to_anchor=(1.02, 1), loc="upper left")
 plt.grid(axis="y", linestyle="--", alpha=0.5)
 plt.tight_layout()
