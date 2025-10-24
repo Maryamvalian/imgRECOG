@@ -1283,11 +1283,6 @@ for j, size in enumerate(subset_sizes[:-1]):  #skip 1600
 # # Correlation (diff(anim,inan)_m1 , diff(anim,inan)_m2)
 
 # %%
-model_dir="models/samesize"
-n_subject=9                  #Loop sub-01,sub-02,...,sub-n_subjects
-size=4
-
-
 def corr_diff(n_subject,size):
     
     R_data = np.full(n_subject, np.nan)
