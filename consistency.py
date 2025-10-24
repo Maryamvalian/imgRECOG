@@ -316,7 +316,7 @@ for size in range (1,9):
         except Exception as e:
             print(f"\n----------- Error processing {subject}: {e}\n")   
 
-# %% [markdown] jupyter={"source_hidden": true}
+# %% [markdown]
 # # Plot morphed model
 
 # %%
@@ -1078,7 +1078,7 @@ for i in range (1,10):
 # %%
 model_dir="models/samesize"
 n_subject=9                  #Loop sub-01,sub-02,...,sub-n_subjects
-size=3
+size=4
 
 def load_model_subset(subset,subject,session,size):
     
@@ -1119,6 +1119,9 @@ def corr_data(animacy, n_subject,size):
     return R_data, Z_data
 
 #------------------------------------------
+R_data_anim, _ = corr_data("anim", n_subject, size)
+R_data_inanim, _ = corr_data("inanim", n_subject, size)
+
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -1151,13 +1154,18 @@ plt.tight_layout()
 plt.show()
 
 
+print(f" anim:{R_data_anim}")
+
+print(f" inanim:{R_data_inanim}")
+print(f" \n\nMean \nanim:{R_data_anim.mean().round(2)}\ninanim:{R_data_inanim.mean().round(2)}")
+
 # %% [markdown]
 # # TRail size data set
 
 # %%
 model_dir = "models/samesize"
 n_subject = 9
-sizes = [0.25, 0.5, 1, 2, ,3, 4, 8]   
+sizes = [0.25, 0.5, 1, 2, 3, 4, 8]   
 trials_per_subset = 200
 #------------------------
 
@@ -1196,7 +1204,7 @@ sns.barplot(
 
 plt.ylim(0, 1.0)
 plt.ylabel("Mean Pearson r")
-plt.title("Model Consistency Across Subset Sizes")
+plt.title("NCRF Model Consistency Across Subset Sizes")
 plt.legend(bbox_to_anchor=(1.02, 1), loc="upper left")
 plt.grid(axis="y", linestyle="--", alpha=0.5)
 plt.tight_layout()
@@ -1269,6 +1277,81 @@ for j, size in enumerate(subset_sizes[:-1]):  #skip 1600
     print(f"Anim: \n {ttest_anim}")
     print(f"Inanim: \n {ttest_inan}")
     
+
+
+# %% [markdown]
+# # Correlation (diff(anim,inan)_m1 , diff(anim,inan)_m2)
+
+# %%
+model_dir="models/samesize"
+n_subject=9                  #Loop sub-01,sub-02,...,sub-n_subjects
+size=4
+
+
+def corr_diff(n_subject,size):
+    
+    R_data = np.full(n_subject, np.nan)
+
+    for i in range(1, n_subject + 1):
+        subject = f"sub-{i:02d}"
+        session = "ImageNet04" if i == 7 else "ImageNet03"
+
+        try:
+            inan1, anim1 = load_model_subset(1, subject, session,size)
+            inan2, anim2 = load_model_subset(2, subject, session,size)
+            d1 = anim1 - inan1
+            d2 = anim2 - inan2
+
+            #Pearson R
+            diff1= np.asarray(d1.get_data()).reshape(-1)
+            diff2= np.asarray(d2.get_data()).reshape(-1)
+            r = np.corrcoef(diff1, diff2)[0, 1]
+            R_data[i - 1] = r
+            
+        except Exception as e:
+            print(f"failed: {e}")
+
+    Z_data = fisher_r_to_z(R_data)
+    return R_data, Z_data
+
+#------------------------------------------
+model_dir = "models/samesize"
+n_subject = 9
+sizes = [0.25, 0.5, 1, 2, 3, 4, 8]   
+trials_per_subset = 200
+#------------------------
+
+results = []
+for size in sizes:
+    R_diff, _ = corr_diff(n_subject, size)
+    
+
+    r_mean = np.nanmean ( R_diff)
+    
+
+    results.append({
+        "Subset Size": int(size * trials_per_subset),
+        "mean_r": r_mean,
+        
+    })
+
+df = pd.DataFrame(results)
+print("\nSummary:")
+print(df)
+
+#-------plot
+plt.figure(figsize=(6, 4))
+sns.barplot(
+    data=df,
+    x="Subset Size", y="mean_r",
+    color="maroon", edgecolor="black", width=0.5
+)
+plt.ylim(0, 1.0)
+plt.ylabel("Mean Pearson r")
+plt.title("Consistency of the pired difference (Animate-Inanimate)")
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.show()
 
 
 # %%
