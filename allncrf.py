@@ -550,6 +550,41 @@ result_an
 save.pickle((result_an,result_inan), f"Tests/ncrf/{mod}-ncrf_1samptest.pickle")
 
 # %%
+result_anmag = result_an.masked_difference().norm('space')
+import mne
+import numpy as np
+
+# Extract the data (numpy array)
+data = result_anmag.x  # shape: (n_sources, n_times)
+
+# Get timing info
+tmin = float(result_anmag.time.tmin)
+tstep = float(result_anmag.time.tstep)
+
+# Identify whether it's volume or surface
+if 'source' in result_anmag.dimnames:
+    vertices = result_anmag.source.vertices
+else:
+    vertices = result_anmag.space.vertices
+
+# Create the SourceEstimate object
+stc = mne.SourceEstimate(
+    data,
+    vertices=vertices,
+    tmin=tmin,
+    tstep=tstep,
+    subject='fsaverage2'  # or your subject name
+)
+
+# ✅ Now you can plot it
+stc.plot(
+    subjects_dir=subjects_dir,
+    initial_time=0.12,
+    clim='auto'
+)
+
+
+# %%
 p = plot.Butterfly(result_an.masked_difference().norm('space'), color='k')
 times = [130,250,400]
 for t in times:
