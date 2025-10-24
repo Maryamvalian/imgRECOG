@@ -312,7 +312,7 @@ for t in times:
 
 # %%
 root_epochs = Path("/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/epochs")
-size=6
+size=1
 per_run=200
 cut_per_cond=int(size * per_run/2)
 #----------
@@ -327,11 +327,13 @@ def resize_epochs(epochs, n):
 #--------------------
 
 
-for i in range(1, 10):
+for i in range(1, 2):
+    """
     if (i<10):
         session="ImageNet03"             
     else:
         session="ImageNet01"
+    """
     
     subject = f"sub-{i:02d}"
     
@@ -354,11 +356,16 @@ for i in range(1, 10):
         subsets=[["08"],["03"]]    #size 0.5, 0.25
         
     for model in range (1,3):       #M1,M2
+
+        session="ImageNet03" if model==1 else "ImageNet04"             #-------added to keep consistency between sizes all data from different session
         
-        subset=subsets[model-1]
+        #subset=subsets[model-1]
+        subset=subsets[0]         # define same runs but diff sessions
+
+        
         run_list = [int(r) for r in subset]
         
-        modelfile = f"models/samesize/mne/{model}-{size}-{subject}-{session}-mne.pickle"
+        modelfile = f"models/samesize/2sesmne/{model}-{size}-{subject}.pickle"
     
         if os.path.exists(modelfile):
             print(f"{model}-{size}-{subject} loaded from file.")
@@ -366,6 +373,7 @@ for i in range(1, 10):
         try:
             print(f"load epochs for {subject}")
             epochs = mne.read_epochs(str(epo_file), preload=True, verbose=False)
+            clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
             clean = mne.io.read_raw_fif(clean_fif, preload=True, verbose=False)
             
             epochs_resamp = epochs.copy().resample(100, npad="auto", verbose=False) 
@@ -390,8 +398,12 @@ for i in range(1, 10):
                 (meta["stim_is_animate"] ==True)
             )
         
-            #epochs_in = epochs_resamp[mask_in] # Not balancing
-            #epochs_an = epochs_resamp[mask_an]
+            epochs_in = epochs_resamp[mask_in] # Not balancing
+            epochs_an = epochs_resamp[mask_an]
+            print("Befor Balancing:")
+            print(f"#Animate={len(epochs_an)}")
+            print(f"#Inanim={len(epochs_in)}")
+            
             print("Balancing trials ")
             epochs_an = resize_epochs(epochs_resamp[mask_an], cut_per_cond)
             epochs_in = resize_epochs(epochs_resamp[mask_in], cut_per_cond)
@@ -463,7 +475,7 @@ for i in range(1, 10):
 # %%
 model_dir="models/samesize/mne"
 n_subject=9                  #Loop sub-01,sub-02,...,sub-n_subjects
-size=6
+size=8
 
 def load_model_subset(subset,subject,session,size):
     
@@ -586,5 +598,78 @@ plt.legend(bbox_to_anchor=(1.02, 1), loc="upper left")
 plt.grid(axis="y", linestyle="--", alpha=0.5)
 plt.tight_layout()
 plt.show()
+
+
+# %%
+def corr_diff(n_subject,size):
+    
+    R_data = np.full(n_subject, np.nan)
+
+    for i in range(1, n_subject + 1):
+        subject = f"sub-{i:02d}"
+        session = "ImageNet03" if i == 7 else "ImageNet03"
+
+        try:
+            inan1, anim1 = load_model_subset(1, subject, session,size)
+            inan2, anim2 = load_model_subset(2, subject, session,size)
+            d1 = anim1 - inan1
+            d2 = anim2 - inan2
+
+            #Pearson R
+            diff1= np.asarray(d1.get_data()).reshape(-1)
+            diff2= np.asarray(d2.get_data()).reshape(-1)
+            r = np.corrcoef(diff1, diff2)[0, 1]
+            R_data[i - 1] = r
+            
+        except Exception as e:
+            print(f"failed: {e}")
+
+    Z_data = fisher_r_to_z(R_data)
+    return R_data, Z_data
+
+def fisher_r_to_z(r):
+    r = np.clip(r, -0.999999, 0.999999)
+    return 0.5 * np.log((1 + r) / (1 - r))
+
+
+#------------------------------------------
+model_dir = "models/samesize/mne"
+n_subject = 9
+sizes = [0.25, 0.5, 1, 2, 3, 4,6,  8]   
+trials_per_subset = 200
+#------------------------
+
+results = []
+for size in sizes:
+    R_diff, _ = corr_diff(n_subject, size)
+    
+
+    r_mean = np.nanmean ( R_diff)
+    
+
+    results.append({
+        "Subset Size": int(size * trials_per_subset),
+        "mean_r": r_mean,
+        
+    })
+
+df = pd.DataFrame(results)
+print("\nSummary:")
+print(df)
+
+#-------plot
+plt.figure(figsize=(6, 4))
+sns.barplot(
+    data=df,
+    x="Subset Size", y="mean_r",
+    color="maroon", edgecolor="black", width=0.5
+)
+plt.ylim(0, 1.0)
+plt.ylabel("Mean Pearson r")
+plt.title("Consistency of the pired difference (Animate-Inanimate)")
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.show()
+
 
 # %%
