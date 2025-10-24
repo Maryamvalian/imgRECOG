@@ -312,7 +312,7 @@ for t in times:
 
 # %%
 root_epochs = Path("/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/epochs")
-size=1
+sizes = [0.25, 0.5, 1, 2, 3, 4,] 
 per_run=200
 cut_per_cond=int(size * per_run/2)
 #----------
@@ -325,152 +325,153 @@ def resize_epochs(epochs, n):
         idx = np.random.choice(len(epochs), n, replace=True)
         return epochs[idx]
 #--------------------
-
-
-for i in range(1, 2):
-    """
-    if (i<10):
-        session="ImageNet03"             
-    else:
-        session="ImageNet01"
-    """
+for size in sizes:
     
-    subject = f"sub-{i:02d}"
+    print(f"========= size= {size}====== ")
+    for i in range(1, 10):
+        """
+        if (i<10):
+            session="ImageNet03"             
+        else:
+            session="ImageNet01"
+        """
+        
+        subject = f"sub-{i:02d}"
+        
+        epo_file = root_epochs / f"{subject}_meg_epo.fif"
+        
     
-    epo_file = root_epochs / f"{subject}_meg_epo.fif"
-    clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
-
-    if size== 8:
-        subsets=[["08", "06", "05", "02", "01", "03", "04", "07"],["08", "06", "05", "02", "01", "03", "04", "07"]]
-    elif size==6: 
-        subsets= [["08", "06", "05", "02", "01", "03"],["08", "06", "05", "02", "01", "03"]]
-    elif size==4:
-        subsets=[["08", "06", "05", "02"],["03", "07", "01", "04"]]
-    elif size==3:
-        subsets=[["02", "01", "03"],["07", "04", "06"]]
-    elif size==2:
-        subsets=[["02", "01"],["08", "04"]]
-    elif size==1:
-        subsets=[["02"], ["08"]]
-    else:
-        subsets=[["08"],["03"]]    #size 0.5, 0.25
-        
-    for model in range (1,3):       #M1,M2
-
-        session="ImageNet03" if model==1 else "ImageNet04"             #-------added to keep consistency between sizes all data from different session
-        
-        #subset=subsets[model-1]
-        subset=subsets[0]         # define same runs but diff sessions
-
-        
-        run_list = [int(r) for r in subset]
-        
-        modelfile = f"models/samesize/2sesmne/{model}-{size}-{subject}.pickle"
-    
-        if os.path.exists(modelfile):
-            print(f"{model}-{size}-{subject} loaded from file.")
-            continue
-        try:
-            print(f"load epochs for {subject}")
-            epochs = mne.read_epochs(str(epo_file), preload=True, verbose=False)
-            clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
-            clean = mne.io.read_raw_fif(clean_fif, preload=True, verbose=False)
+        if size== 8:
+            subsets=[["08", "06", "05", "02", "01", "03", "04", "07"],["08", "06", "05", "02", "01", "03", "04", "07"]]
+        elif size==6: 
+            subsets= [["08", "06", "05", "02", "01", "03"],["08", "06", "05", "02", "01", "03"]]
+        elif size==4:
+            subsets=[["02", "01", "03", "05"],["03", "07", "01", "04"]]
+        elif size==3:
+            subsets=[["02", "01", "03"],["07", "04", "06"]]
+        elif size==2:
+            subsets=[["02", "01"],["08", "04"]]
+        elif size==1:
+            subsets=[["02"], ["08"]]
+        else:
+            subsets=[["08"],["03"]]    #size 0.5, 0.25
             
-            epochs_resamp = epochs.copy().resample(100, npad="auto", verbose=False) 
+        for model in range (1,3):       #M1,M2
+    
+            session="ImageNet03" if model==1 else "ImageNet04"             #-------added to keep consistency between sizes all data from different session
+            
+            #subset=subsets[model-1]
+            subset=subsets[0]         # define same runs but diff sessions
+    
+            
+            run_list = [int(r) for r in subset]
+            
+            modelfile = f"models/samesize/2sesmne/{model}-{size}-{subject}.pickle"
+        
+            if os.path.exists(modelfile):
+                print(f"{model}-{size}-{subject} loaded from file.")
+                continue
+            try:
+                print(f"load epochs for {subject}")
+                epochs = mne.read_epochs(str(epo_file), preload=True, verbose=False)
+                clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
+                clean = mne.io.read_raw_fif(clean_fif, preload=True, verbose=False)
                 
-            meta = epochs_resamp.metadata
-            #sub-03 meta data is not boolean convert to boolean 
-            if i==3:
-                meta["stim_is_animate"] = meta["stim_is_animate"].apply(lambda x: True if str(x).lower() == "true" else False)
-        
-                
-            mask_in = (
-                (meta["subject"] == i) &
-                (meta["session"] == session) &   
-                (meta["run"].isin(run_list)) &           #(meta["run"] == int(run))&
-                (meta["stim_is_animate"] ==False)
-            )
-
-            mask_an = (
-                (meta["subject"]== i) &
-                (meta["session"]== session) & 
-                (meta["run"].isin(run_list)) & 
-                (meta["stim_is_animate"] ==True)
-            )
-        
-            epochs_in = epochs_resamp[mask_in] # Not balancing
-            epochs_an = epochs_resamp[mask_an]
-            print("Befor Balancing:")
-            print(f"#Animate={len(epochs_an)}")
-            print(f"#Inanim={len(epochs_in)}")
+                epochs_resamp = epochs.copy().resample(100, npad="auto", verbose=False) 
+                    
+                meta = epochs_resamp.metadata
+                #sub-03 meta data is not boolean convert to boolean 
+                if i==3:
+                    meta["stim_is_animate"] = meta["stim_is_animate"].apply(lambda x: True if str(x).lower() == "true" else False)
             
-            print("Balancing trials ")
-            epochs_an = resize_epochs(epochs_resamp[mask_an], cut_per_cond)
-            epochs_in = resize_epochs(epochs_resamp[mask_in], cut_per_cond)
-
-            
-            
-            print(f"#Animate={len(epochs_an)}")
-            print(f"#Inanim={len(epochs_in)}")
-    
-    
-            evoked_anim= epochs_an.average()
-            evoked_inanim= epochs_in.average()
-            
-            src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-lr-src.fif"        #not merged l,R
-            src = mne.read_source_spaces(str(src_file),verbose=False)
-        
-            bem_sol_fif=f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
-            bem_sol = mne.read_bem_solution(bem_sol_fif,verbose=False)
-            
-            trans_fif= f"{root}/derivatives/trans/{subject}-{session}-trans.fif"
-            trans=mne.read_trans(trans_fif)
-    
-            print("   Computing FWD")
-            fwd = mne.make_forward_solution(
-                    clean.info, trans, src, bem_sol,
-                    meg=True, eeg=False, mindist=0, verbose=False
+                    
+                mask_in = (
+                    (meta["subject"] == i) &
+                    (meta["session"] == session) &   
+                    (meta["run"].isin(run_list)) &           #(meta["run"] == int(run))&
+                    (meta["stim_is_animate"] ==False)
                 )
-        
-                      
-            print("   Inverse...")
-            inv = mne.minimum_norm.make_inverse_operator(
-                info=clean.info,
-                forward=fwd,
-                noise_cov=noise_cov,
-                loose=1.0,    
-                depth=0.8,
-                fixed=False,
-                verbose=False,
-            )
-            
-            snr = 3.0
-            lambda2 = 1.0 / snr**2
-            
-            
-            stc_anim_vec = mne.minimum_norm.apply_inverse(
-                evoked_anim, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False)
-            
-            stc_inan_vec = mne.minimum_norm.apply_inverse(
-                evoked_inanim, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False)
     
+                mask_an = (
+                    (meta["subject"]== i) &
+                    (meta["session"]== session) & 
+                    (meta["run"].isin(run_list)) & 
+                    (meta["stim_is_animate"] ==True)
+                )
             
-            print(f"Morphing ...")
-            print("   morphing 1/2")
-            R,L,anim = morph_hemi(stc_anim_vec, subject=subject, subject_to="fsaverage2",
-                                  subjects_dir=subjects_dir, src_tag="vol-7")
-            print("   morphing 2/2")
-            R_in,L_in,inan = morph_hemi(stc_inan_vec, subject=subject, subject_to="fsaverage2",
-                                  subjects_dir=subjects_dir, src_tag="vol-7")
-            
-            save.pickle((inan,anim), modelfile)
-                      
-            
-                             
-            print(f"=====>M{model}-{subject } done!")
-        except Exception as e:
-            print(f"Error processing {subject}: {e}")   
+                epochs_in = epochs_resamp[mask_in] # Not balancing
+                epochs_an = epochs_resamp[mask_an]
+                print("Befor Balancing:")
+                print(f"#Animate={len(epochs_an)}")
+                print(f"#Inanim={len(epochs_in)}")
+                
+                print("Balancing trials ")
+                epochs_an = resize_epochs(epochs_resamp[mask_an], cut_per_cond)
+                epochs_in = resize_epochs(epochs_resamp[mask_in], cut_per_cond)
+    
+                
+                
+                print(f"#Animate={len(epochs_an)}")
+                print(f"#Inanim={len(epochs_in)}")
         
+        
+                evoked_anim= epochs_an.average()
+                evoked_inanim= epochs_in.average()
+                
+                src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-lr-src.fif"        #not merged l,R
+                src = mne.read_source_spaces(str(src_file),verbose=False)
+            
+                bem_sol_fif=f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
+                bem_sol = mne.read_bem_solution(bem_sol_fif,verbose=False)
+                
+                trans_fif= f"{root}/derivatives/trans/{subject}-{session}-trans.fif"
+                trans=mne.read_trans(trans_fif)
+        
+                print("   Computing FWD")
+                fwd = mne.make_forward_solution(
+                        clean.info, trans, src, bem_sol,
+                        meg=True, eeg=False, mindist=0, verbose=False
+                    )
+            
+                          
+                print("   Inverse...")
+                inv = mne.minimum_norm.make_inverse_operator(
+                    info=clean.info,
+                    forward=fwd,
+                    noise_cov=noise_cov,
+                    loose=1.0,    
+                    depth=0.8,
+                    fixed=False,
+                    verbose=False,
+                )
+                
+                snr = 3.0
+                lambda2 = 1.0 / snr**2
+                
+                
+                stc_anim_vec = mne.minimum_norm.apply_inverse(
+                    evoked_anim, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False)
+                
+                stc_inan_vec = mne.minimum_norm.apply_inverse(
+                    evoked_inanim, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False)
+        
+                
+                print(f"Morphing ...")
+                print("   morphing 1/2")
+                R,L,anim = morph_hemi(stc_anim_vec, subject=subject, subject_to="fsaverage2",
+                                      subjects_dir=subjects_dir, src_tag="vol-7")
+                print("   morphing 2/2")
+                R_in,L_in,inan = morph_hemi(stc_inan_vec, subject=subject, subject_to="fsaverage2",
+                                      subjects_dir=subjects_dir, src_tag="vol-7")
+                
+                save.pickle((inan,anim), modelfile)
+                          
+                
+                                 
+                print(f"=====>M{model}-{subject } done!")
+            except Exception as e:
+                print(f"Error processing {subject}: {e}")   
+            
 
 # %%
 model_dir="models/samesize/mne"
