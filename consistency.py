@@ -841,11 +841,14 @@ ds.tail()
 # # SECOND EXPERIMENT : Non-overlapping Data
 # ## FIT NCRF
 
+# %% [markdown]
+# <hr><br><br>
+
 # %%
 #TRIM MEG TO HALF SIZE (SHOULD TRIM MEG ONLY TRIMING STIM doesn't WORKS)
 model_dir = "models/samesize/effect"
-#sizes = [0.25, 0.5, 1, 2,  3, 4, 6 ,8] 
-sizes = [0.25, 1,  4,8] 
+sizes = [0.25, 0.5, 1, 2,  3, 4, 6 ,8] 
+
 for size in sizes:
     print(f"=================== Size={size}==================")
     for i in range (1,10):                 #first 9 subjects
@@ -930,6 +933,7 @@ for size in sizes:
              print(f"\n----------- Error processing {subject}: {e}\n")  
 
 # %%
+"""
 n_anim = event_table['animate'].sum()          # True values = animate trials
 n_inanim = (~event_table['animate']).sum()     # False values = inanimate trials
 n_total = len(event_table)
@@ -937,31 +941,32 @@ n_total = len(event_table)
 print(f"Total trials: {n_total}")
 print(f"Animate trials: {n_anim}")
 print(f"Inanimate trials: {n_inanim}")
+"""
 
 # %% [markdown]
 # ## Morph
 
 # %%
-model_dir="models/samesize"
-size=3
+model_dir="models/samesize/effect"
+size=0.25
 for i in range (1,10):
+    
     subject = f"sub-{i:02d}"
-    if i==7:
-        session="ImageNet04"
-    else:
-        session="ImageNet03"
-    for subset in range (1,3):
+    if i==7 or i==6:
+        continue
+       
+    for model in range (1,3):
         
-        morphed_file = f"{model_dir}/M{subset}-{size}-{subject}-{session}-ncrf.pickle"  #M stands for Morphed
+        morphed_file = f"{model_dir}/M{model}-{size}-{subject}.pickle"  #M stands for Morphed
         if os.path.exists(morphed_file):
             
-            print(f" {subset}-{size}-{subject}-{session} exists.")
-            #inanim, anim = load.unpickle(morphed_file)
+            print(f" {model}-{size}-{subject}-{session} exists.")
+           
         else:
             try:
                     
-                print(f"Morphing {subset}-{size}-{subject}-{session}...")
-                modelfile = f"{model_dir}/{subset}-{size}-{subject}-{session}-ncrf.pickle"
+                print(f"Morphing {model}-{size}-{subject}...")
+                modelfile = f"{model_dir}/{model}-{size}-{subject}.pickle"
                 model= load.unpickle(modelfile)
                 hlist = model.h
                 
@@ -969,9 +974,14 @@ for i in range (1,10):
                     inanim = hlist[0]
                     anim = hlist[1]
                 elif mod=="effect":
-                    h_mean,h_contrast = hlist[0],hlist[1]
+                    
+                    general,contrast = hlist[0],hlist[1]
+                    anim= general
+                    inanim= contrast
+                    """
                     anim = h_mean+ h_contrast
                     inanim = h_mean- h_contrast 
+                    """
                 
                 elif mod=="ortho":
                     h_mean,h_contrast= hlist[0],hlist[1]
@@ -1022,7 +1032,8 @@ for i in range (1,10):
                 anim= anim_fs.smooth('source', 0.01, 'gaussian')
                 inanim= inanim_fs.smooth('source', 0.01, 'gaussian')
                 
-                save.pickle((inanim, anim), morphed_file)
+                save.pickle((inanim, anim), morphed_file)   
+                #if mod=effect (contrast, general) is saved instead of inanim ,anim ===> inanim=contrast
                 print(f"\n{modelfile} Saved \n ")
         
             except Exception as e:
