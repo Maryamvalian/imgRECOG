@@ -1324,6 +1324,7 @@ plt.show()
 # # EFFECT NCRF PLOT CONSISTENCY
 
 # %%
+#morph models for sizes are ready!
 model_dir = "models/samesize/effect"
 sizes = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
 trials_per_subset = 200
@@ -1381,3 +1382,5 @@ plt.title("Within Subject :Contrast Consistency- Effect NCRF", fontsize=12)
 plt.grid(axis="y", linestyle="--", alpha=0.5)
 plt.tight_layout()
 plt.show()
+
+# %%
