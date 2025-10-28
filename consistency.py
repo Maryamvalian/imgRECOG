@@ -137,43 +137,8 @@ def make_predictors_for_run(meg_ndvar, event_table,mod):
     
 
 
-# %%
-import random
-from typing import List, Dict
-
-def independent_subsets(runs: List[str], k_max: int, n_repeats: int = 2, seed: int = 11) -> Dict[int, List[List[str]]]:
-   
-    rng = random.Random(seed)
-    out: Dict[int, List[List[str]]] = {}
-    for k in range(1, k_max + 1):
-        out[k] = [rng.sample(runs, k) for _ in range(n_repeats)]
-    return out
-#-------------------------------------------
-def nested_subsets(runs: List[str], k_max: int, n_repeats: int = 2, seed: int = 11) -> Dict[int, List[List[str]]]:
-    
-    rng = random.Random(seed)
-    out: Dict[int, List[List[str]]] = {}
-    
-    for _ in range(n_repeats):
-        rng.shuffle(runs)  # random order of runs
-        seq = []
-        for k in range(1, k_max + 1):
-            seq.append(runs[:k])
-            out.setdefault(k, []).append(runs[:k])
-            
-    return out
-#-------------------------------------------    
-
-
-
 # %% [markdown]
 # # Make random subset 
-
-# %%
-runs = [f"0{i}" for i in range(1, 9)]
-#subs = independent_subsets(runs, k_max=8, n_repeats=1, seed=11)      
-subs = nested_subsets(runs, k_max=8, n_repeats=1, seed=11)
-subs
 
 # %% [markdown]
 # # Fit NCRF Models
@@ -885,7 +850,8 @@ ds.tail()
 # %%
 #TRIM MEG TO HALF SIZE (SHOULD TRIM MEG ONLY TRIMING STIM doesn't WORKS)
 model_dir = "models/samesize/effect"
-sizes = [0.25, 0.5, 1, 2,  3, 4, 6 ,8] 
+#sizes = [0.25, 0.5, 1, 2,  3, 4, 6 ,8] 
+sizes = [0.25, 1,  4,8] 
 for size in sizes:
     print(f"=================== Size={size}==================")
     for i in range (1,10):                 #first 9 subjects
