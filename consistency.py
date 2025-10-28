@@ -948,97 +948,100 @@ print(f"Inanimate trials: {n_inanim}")
 
 # %%
 model_dir="models/samesize/effect"
-size=0.25
-for i in range (1,10):
+sizes = [0.25, 0.5, 1, 2,  3, 4, 6 ,8] 
+
+for size in sizes:
     
-    subject = f"sub-{i:02d}"
-    if i==7 or i==6:
-        continue
-       
-    for model in range (1,3):
+    for i in range (1,10):
         
-        morphed_file = f"{model_dir}/M{model}-{size}-{subject}.pickle"  #M stands for Morphed
-        if os.path.exists(morphed_file):
-            
-            print(f" {model}-{size}-{subject}-{session} exists.")
+        subject = f"sub-{i:02d}"
+        if i==7 or i==6:
+            continue
            
-        else:
-            try:
+        for model in range (1,3):
+            
+            morphed_file = f"{model_dir}/M{model}-{size}-{subject}.pickle"  #M stands for Morphed
+            if os.path.exists(morphed_file):
+                
+                print(f" {model}-{size}-{subject}-{session} exists.")
+               
+            else:
+                try:
+                        
+                    print(f"Morphing {model}-{size}-{subject}...")
+                    modelfile = f"{model_dir}/{model}-{size}-{subject}.pickle"
+                    model= load.unpickle(modelfile)
+                    hlist = model.h
                     
-                print(f"Morphing {model}-{size}-{subject}...")
-                modelfile = f"{model_dir}/{model}-{size}-{subject}.pickle"
-                model= load.unpickle(modelfile)
-                hlist = model.h
-                
-                if mod=="dummy":
-                    inanim = hlist[0]
-                    anim = hlist[1]
-                elif mod=="effect":
+                    if mod=="dummy":
+                        inanim = hlist[0]
+                        anim = hlist[1]
+                    elif mod=="effect":
+                        
+                        general,contrast = hlist[0],hlist[1]
+                        anim= general
+                        inanim= contrast
+                        """
+                        anim = h_mean+ h_contrast
+                        inanim = h_mean- h_contrast 
+                        """
                     
-                    general,contrast = hlist[0],hlist[1]
-                    anim= general
-                    inanim= contrast
-                    """
-                    anim = h_mean+ h_contrast
-                    inanim = h_mean- h_contrast 
-                    """
-                
-                elif mod=="ortho":
-                    h_mean,h_contrast= hlist[0],hlist[1]
-                    anim = h_mean+ code_anim* h_contrast
-                    inanim = h_mean+ code_inanim* h_contrast
-                
-                #morph  
-                fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
-                fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
-                
-                
-                stc_vec_anim = ndvar_merged_to_stc_lr(
+                    elif mod=="ortho":
+                        h_mean,h_contrast= hlist[0],hlist[1]
+                        anim = h_mean+ code_anim* h_contrast
+                        inanim = h_mean+ code_inanim* h_contrast
                     
-                    ndvar=anim,
-                    fwd=fwd,
-                    subject=subject,
-                    subjects_dir=subjects_dir,
-                    src_tag="vol-7",
-                )
-                stc_vec_inanim = ndvar_merged_to_stc_lr(
+                    #morph  
+                    fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
+                    fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
                     
-                    ndvar=inanim,
-                    fwd=fwd,
-                    subject=subject,
-                    subjects_dir=subjects_dir,
-                    src_tag="vol-7",
-                )
-                
-                print("     1/2")        
-                an_L_fs, an_R_fs, anim_fs = morph_hemi(
-                    stc_vec_anim,
-                    subject=subject,
-                    subject_to="fsaverage2",
-                    subjects_dir=subjects_dir,
-                    src_tag="vol-7",
-                )
-                
-                print("     2/2")        
-                _, _, inanim_fs = morph_hemi(
-                    stc_vec_inanim,
-                    subject=subject,
-                    subject_to="fsaverage2",
-                    subjects_dir=subjects_dir,
-                    src_tag="vol-7",
-                )
-                               
-                
-                anim= anim_fs.smooth('source', 0.01, 'gaussian')
-                inanim= inanim_fs.smooth('source', 0.01, 'gaussian')
-                
-                save.pickle((inanim, anim), morphed_file)   
-                #if mod=effect (contrast, general) is saved instead of inanim ,anim ===> inanim=contrast
-                print(f"\n{modelfile} Saved \n ")
-        
-            except Exception as e:
-                
-                print(f"\n----------- Error processing {subject}: {e}\n")   
+                    
+                    stc_vec_anim = ndvar_merged_to_stc_lr(
+                        
+                        ndvar=anim,
+                        fwd=fwd,
+                        subject=subject,
+                        subjects_dir=subjects_dir,
+                        src_tag="vol-7",
+                    )
+                    stc_vec_inanim = ndvar_merged_to_stc_lr(
+                        
+                        ndvar=inanim,
+                        fwd=fwd,
+                        subject=subject,
+                        subjects_dir=subjects_dir,
+                        src_tag="vol-7",
+                    )
+                    
+                    print("     1/2")        
+                    an_L_fs, an_R_fs, anim_fs = morph_hemi(
+                        stc_vec_anim,
+                        subject=subject,
+                        subject_to="fsaverage2",
+                        subjects_dir=subjects_dir,
+                        src_tag="vol-7",
+                    )
+                    
+                    print("     2/2")        
+                    _, _, inanim_fs = morph_hemi(
+                        stc_vec_inanim,
+                        subject=subject,
+                        subject_to="fsaverage2",
+                        subjects_dir=subjects_dir,
+                        src_tag="vol-7",
+                    )
+                                   
+                    
+                    anim= anim_fs.smooth('source', 0.01, 'gaussian')
+                    inanim= inanim_fs.smooth('source', 0.01, 'gaussian')
+                    
+                    save.pickle((inanim, anim), morphed_file)   
+                    #if mod=effect (contrast, general) is saved instead of inanim ,anim ===> inanim=contrast
+                    print(f"\n{modelfile} Saved \n ")
+            
+                except Exception as e:
+                    
+                    print(f"\n----------- Error processing {subject}: {e}\n")   
 
 # %% [markdown]
 # # R_Data from morphed files
@@ -1317,4 +1320,64 @@ plt.tight_layout()
 plt.show()
 
 
+# %% [markdown]
+# # EFFECT NCRF PLOT CONSISTENCY
+
 # %%
+model_dir = "models/samesize/effect"
+sizes = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
+trials_per_subset = 200
+
+results = []  
+
+for size in sizes:
+    
+    r_values = []
+
+    for i in range(1, 10):
+        if i in [6, 7]:
+            continue
+
+        subject = f"sub-{i:02d}"
+        m1 = f"{model_dir}/M1-{size}-{subject}.pickle"
+        m2 = f"{model_dir}/M2-{size}-{subject}.pickle"
+
+        if not (os.path.exists(m1) and os.path.exists(m2)):
+            continue
+
+        contrast1, _ = load.unpickle(m1)
+        contrast2, _ = load.unpickle(m2)
+
+        a = contrast1.get_data().ravel()
+        b = contrast2.get_data().ravel()
+        r = np.corrcoef(a, b)[0, 1]
+        r_values.append(r)
+
+    r_mean = np.nanmean(r_values)
+    results.append({
+        "Subset Size": int(size * trials_per_subset),
+        "mean_r": r_mean
+    })
+
+
+df = pd.DataFrame(results)
+print("\nSummary:")
+print(df)
+
+
+plt.figure(figsize=(6, 4))
+sns.barplot(
+    data=df,
+    x="Subset Size",
+    y="mean_r",
+    color="maroon",
+    edgecolor="black",
+    width=0.5
+)
+plt.ylim(0, 1)
+plt.ylabel("Mean Pearson r", fontsize=11)
+plt.xlabel("Number of Trials", fontsize=11)
+plt.title("Within Subject :Contrast Consistency- Effect NCRF", fontsize=12)
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.show()
