@@ -311,10 +311,19 @@ for t in times:
 # ## BALANCED DATA
 
 # %%
+sbj="sub-06"
+epo_file = root_epochs / f"{sbj}_meg_epo.fif"
+epochs111 = mne.read_epochs(str(epo_file), preload=True, verbose=False)
+epochs_resamp111 = epochs111.copy().resample(100, npad="auto", verbose=False) 
+meta111 = epochs_resamp111.metadata
+meta4 = meta111[ (meta111["session"] == "ImageNet04")]
+meta4
+
+# %%
 root_epochs = Path("/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/epochs")
-sizes = [0.25, 0.5, 1, 2, 3, 4,] 
+sizes = [0.25, 0.5, 1, 2,  4, 6 ,8] 
 per_run=200
-cut_per_cond=int(size * per_run/2)
+
 #----------
 def resize_epochs(epochs, n):
     #for balancing the condition trial#
@@ -328,6 +337,7 @@ def resize_epochs(epochs, n):
 for size in sizes:
     
     print(f"========= size= {size}====== ")
+    cut_per_cond=int(size * per_run/2)
     for i in range(1, 10):
         """
         if (i<10):
@@ -341,29 +351,14 @@ for size in sizes:
         epo_file = root_epochs / f"{subject}_meg_epo.fif"
         
     
-        if size== 8:
-            subsets=[["08", "06", "05", "02", "01", "03", "04", "07"],["08", "06", "05", "02", "01", "03", "04", "07"]]
-        elif size==6: 
-            subsets= [["08", "06", "05", "02", "01", "03"],["08", "06", "05", "02", "01", "03"]]
-        elif size==4:
-            subsets=[["02", "01", "03", "05"],["03", "07", "01", "04"]]
-        elif size==3:
-            subsets=[["02", "01", "03"],["07", "04", "06"]]
-        elif size==2:
-            subsets=[["02", "01"],["08", "04"]]
-        elif size==1:
-            subsets=[["02"], ["08"]]
-        else:
-            subsets=[["08"],["03"]]    #size 0.5, 0.25
+        ordered_runs = ["02", "01", "03", "06", "04", "05", "07", "08"]
+        cut= size if size>=1 else 1
+        subset = ordered_runs[:cut]
+        
             
         for model in range (1,3):       #M1,M2
     
-            session="ImageNet03" if model==1 else "ImageNet04"             #-------added to keep consistency between sizes all data from different session
-            
-            #subset=subsets[model-1]
-            subset=subsets[0]         # define same runs but diff sessions
-    
-            
+            session="ImageNet03" if model==1 else "ImageNet04"            
             run_list = [int(r) for r in subset]
             
             modelfile = f"models/samesize/2sesmne/{model}-{size}-{subject}.pickle"
@@ -372,7 +367,7 @@ for size in sizes:
                 print(f"{model}-{size}-{subject} loaded from file.")
                 continue
             try:
-                print(f"load epochs for {subject}")
+                print(f"{subject}, Run= {run_list}, Session={session}")
                 epochs = mne.read_epochs(str(epo_file), preload=True, verbose=False)
                 clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
                 clean = mne.io.read_raw_fif(clean_fif, preload=True, verbose=False)
@@ -401,18 +396,14 @@ for size in sizes:
             
                 epochs_in = epochs_resamp[mask_in] # Not balancing
                 epochs_an = epochs_resamp[mask_an]
-                print("Befor Balancing:")
-                print(f"#Animate={len(epochs_an)}")
-                print(f"#Inanim={len(epochs_in)}")
+                print(f"Befor Balancing: Animate={len(epochs_an)},Inanim={len(epochs_in)} ")
+               
                 
-                print("Balancing trials ")
+                
                 epochs_an = resize_epochs(epochs_resamp[mask_an], cut_per_cond)
-                epochs_in = resize_epochs(epochs_resamp[mask_in], cut_per_cond)
-    
+                epochs_in = resize_epochs(epochs_resamp[mask_in], cut_per_cond)        
+                print(f"BALANCED : Animate={len(epochs_an)}, Inanim={len(epochs_in)}")
                 
-                
-                print(f"#Animate={len(epochs_an)}")
-                print(f"#Inanim={len(epochs_in)}")
         
         
                 evoked_anim= epochs_an.average()
@@ -474,13 +465,15 @@ for size in sizes:
             
 
 # %%
-model_dir="models/samesize/mne"
+#ONE size plot among subjects
+"""
+model_dir="models/samesize/2sesmne"
 n_subject=9                  #Loop sub-01,sub-02,...,sub-n_subjects
-size=8
+size=6
 
 def load_model_subset(subset,subject,session,size):
     
-    morphed_file = f"{model_dir}/{subset}-{size}-{subject}-{session}-mne.pickle"
+    morphed_file = f"{model_dir}/{subset}-{size}-{subject}.pickle"
     inan, anim = load.unpickle(morphed_file)
     return inan, anim
 
@@ -549,13 +542,12 @@ plt.legend(bbox_to_anchor=(1.02, 1),loc='upper left')
 plt.grid(axis='y', linestyle='--', alpha=0.5)
 plt.tight_layout()
 plt.show()
+"""
 
 # %%
-
-# %%
-model_dir = "models/samesize/mne"
+model_dir = "models/samesize/2sesmne"
 n_subject = 9
-sizes = [0.25, 0.5, 1, 2,  3, 4, 6, 8]   
+sizes = [0.25, 0.5, 1, 2,3, 4, 6, 8]   
 trials_per_subset = 200
 #------------------------
 
@@ -573,15 +565,15 @@ for size in sizes:
         "Inanimate": mean_r_inan
     })
 
-df = pd.DataFrame(results)
+df_animacy = pd.DataFrame(results)
 print("\nSummary:")
-print(df)
+print(df_animacy)
 
 
 
 # ----------------------------------------
 # Melt for seaborn plotting
-df_melted = df.melt(id_vars="Subset Size", var_name="Animacy", value_name="Mean r")
+df_melted = df_animacy.melt(id_vars="Subset Size", var_name="Animacy", value_name="Mean r")
 #plot
 plt.figure(figsize=(6, 4))
 sns.barplot(
@@ -634,9 +626,9 @@ def fisher_r_to_z(r):
 
 
 #------------------------------------------
-model_dir = "models/samesize/mne"
+model_dir = "models/samesize/2sesmne"
 n_subject = 9
-sizes = [0.25, 0.5, 1, 2, 3, 4,6,  8]   
+sizes = [0.25, 0.5, 1, 2, 3, 4,6,8]   
 trials_per_subset = 200
 #------------------------
 
@@ -672,5 +664,56 @@ plt.grid(axis="y", linestyle="--", alpha=0.5)
 plt.tight_layout()
 plt.show()
 
+
+# %%
+import pandas as pd
+import matplotlib.pyplot as plt
+
+#df from mne results
+
+#hardcoded for ncrf results from consistency.py
+ncrf_data = pd.DataFrame({
+    "Subset Size": [50, 100, 200, 400, 600, 800, 1600],
+    "mean_r": [0.109234, 0.127496, 0.231609, 0.295263, 0.400948, 0.421631, 0.535664]
+})
+
+plt.figure(figsize=(7, 5))
+plt.plot(df["Subset Size"], df["mean_r"], marker='o', linewidth=2, label="MNE")
+plt.plot(ncrf_data["Subset Size"], ncrf_data["mean_r"], marker='s', linewidth=2, label="NCRF")
+
+plt.xlabel("Number of Trials")
+plt.ylabel("Mean R (contrast Anim-Inanim)")
+plt.title("Consistency Comparison MNE ns NCRF ")
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.6)
+plt.tight_layout()
+plt.show()
+
+
+# %%
+#hard coded for now
+ncrf_df = pd.DataFrame({
+    "Subset Size": [50, 100, 200, 400, 600, 800, 1600],
+    "Animate": [0.574344, 0.650199, 0.692284, 0.762682, 0.852699, 0.855087, 0.853538],
+    "Inanimate": [0.605400, 0.702857, 0.744667, 0.791608, 0.876339, 0.871014, 0.860871]
+})
+
+
+plt.figure(figsize=(8, 6))
+plt.plot(df_animacy["Subset Size"], df_animacy["Animate"], color='#1f77b4', linestyle='-', marker='o', linewidth=2, label="MNE - Animate")
+plt.plot(df_animacy["Subset Size"], df_animacy["Inanimate"], color='#1f77b4', linestyle='--', marker='s', linewidth=2, label="MNE - Inanimate")
+
+# NCRF (orange)
+plt.plot(ncrf_df["Subset Size"], ncrf_df["Animate"], color='#ff7f0e', linestyle='-', marker='o', linewidth=2, label="NCRF - Animate")
+plt.plot(ncrf_df["Subset Size"], ncrf_df["Inanimate"], color='#ff7f0e', linestyle='--', marker='s', linewidth=2, label="NCRF - Inanimate")
+
+# Labels and title
+plt.xlabel("Number of Trials (Subset Size)")
+plt.ylabel("Mean Correlation (R)")
+plt.title("Consistency vs. Trial Size for Animate and Inanimate Conditions")
+plt.legend()
+plt.grid(True, linestyle="--", alpha=0.6)
+plt.tight_layout()
+plt.show()
 
 # %%
