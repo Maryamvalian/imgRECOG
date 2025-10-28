@@ -625,7 +625,6 @@ plt.show()
 
 print(corr_mat)        
 
-
 # %% [markdown]
 # # R2 Measure for each voxel 
 # Compare Model A with true model B<br>
@@ -640,6 +639,7 @@ print(corr_mat)
 #
 
 # %%
+"""
 def ndvar_r2(model1_tuple, model2_tuple, animacy="anim"):
     
     inan1, an1 = model1_tuple
@@ -710,15 +710,10 @@ plot.GlassBrain(
     title=title
 )
 
-# %% [markdown]
-# ## plot R2 (model i , and Model 8 )
 
-# %%
-subject="sub-08"
-
-# %%
+#plot
 animacy="inanim"
-
+subject="sub-08"
 names = [f'M{i}' for i in range(1,9)]
 
 n = len(names)
@@ -736,7 +731,7 @@ model_indices = np.arange(1, n + 1)
 
 fig, ax = plt.subplots(figsize=(7, 5))
 
-# Plot 
+# Plot plot R2 (model i , and Model 8 )
 ax.plot(model_indices, M, marker='o', linestyle='-', color='C0', label='Mean $R^2$')
 
 
@@ -754,8 +749,7 @@ plt.tight_layout()
 plt.show()       
                                                              
          
-
-    
+"""
 
 # %% [markdown]
 # # GROUP LEVEL
