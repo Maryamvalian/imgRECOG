@@ -879,98 +879,95 @@ ds.tail()
 
 
 # %% [markdown]
-# # SECOND EXPERIMENT : STABILITY AT FIX SIZE
+# # SECOND EXPERIMENT : Non-overlapping Data
 # ## FIT NCRF
 
 # %%
 #TRIM MEG TO HALF SIZE (SHOULD TRIM MEG ONLY TRIMING STIM doesn't WORKS)
-model_dir = "models/samesize"
-size = 3
-
-for i in range (1,10):                 #first 9 subjects
-    if i==7 :
-        session="ImageNet04"
-    else:
-        session="ImageNet03"
-    subject = f"sub-{i:02d}"
-    
-    #FWD for Session
-    
-    clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
-    clean = mne.io.read_raw_fif(clean_fif, preload=False,verbose=False)
-    info= clean.info           
-    meg_ndvar = load.fiff.raw_ndvar(clean)
-    sensor=meg_ndvar.sensor
-    
-    if size == 0.5 or size == 0.25:
-        subsets = [['08'],['03']]
-    elif size == 1:
-        subsets = [['02'],['08']]
-    elif size == 2:
-        subsets=[['02' , '01'],['08' , '04']]
-    elif size == 3:
-        subsets = [['02' , '01' , '03'],['07', '04' , '08']]
+model_dir = "models/samesize/effect"
+sizes = [0.25, 0.5, 1, 2,  3, 4, 6 ,8] 
+for size in sizes:
+    print(f"=================== Size={size}==================")
+    for i in range (1,10):                 #first 9 subjects
+        if i==7 or i==6 :
+            continue
+           
         
-    else:
-        subsets=[['08', '06', '05', '02'],['03','07', '01', '04']]
-    keyfwd=True
-    for model in range (1,3):           #M1, M2
-        subset=subsets[model-1]
-        #print(f"{subset}")
-        modelfile = f"{model_dir}/{model}-{size}-{subject}-{session}-ncrf.pickle"
-        morphfile = f"{model_dir}/M{model}-{size}-{subject}-{session}-ncrf.pickle"
-        if os.path.exists(modelfile):
-            print(f"{model}-{size}-{subject}-{session} model file exists.")
-            continue
-        if os.path.exists(morphfile):
-            print(f"{model}-{size}-{subject}-{session} Morph file exists.")
-            continue
-        try:        
-            if (keyfwd==True):
+        subject = f"sub-{i:02d}"
+        
+        #FWD for Session
+        
+        clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
+        clean = mne.io.read_raw_fif(clean_fif, preload=False,verbose=False)
+        info= clean.info           
+        meg_ndvar = load.fiff.raw_ndvar(clean)
+        sensor=meg_ndvar.sensor
+        
+        
+        ordered_runs = ["02", "01", "03", "06", "04", "05", "07", "08"]
+        run_select= size if size>=1 else 1
+        subset = ordered_runs[:run_select]
+    
+        
+        for model in range (1,3):           #M1, M2
+    
+            session="ImageNet03" if model==1 else "ImageNet04"            
+            run_list = [r for r in subset]
+            #subset=subsets[model-1]
+            #print(f"{subset}")
+            modelfile = f"{model_dir}/{model}-{size}-{subject}.pickle"
+            morphfile = f"{model_dir}/M{model}-{size}-{subject}.pickle"
+            if os.path.exists(modelfile):
+                print(f"{model}-{size}-{subject} model file exists.")
+                continue
+            if os.path.exists(morphfile):
+                print(f"{model}-{size}-{subject} Morph file exists.")
+                continue
+            try:        
                 print(f"computing fwd for {subject}-{session}... ")
                 fwd = compute_fwd_ndvar(subject, session,subjects_dir,info,sensor)
-                keyfwd=False
-            meg_all = []
-            stim_all = []
-            for run in subset:
-                
-                print(f"Loading run-{run} MEG ...")
-                meg= load_meg_ndvar(subject, session, run)
-                #meg_all.append(meg)
-                event_table= make_event_table(subject, session, run)
-                #-----------half
-
-                event_table = event_table.sort_values(by='time').reset_index(drop=True)
-
-                cut = int(200 * size)
-
-                if size==0.5 or size==0.25:
+                   
+                meg_all = []
+                stim_all = []
+                for run in subset:
                     
-                    if len(event_table) > cut:
-                        event_table = event_table.iloc[:cut]
-                    else:
-                        print(f"failed event table")
+                    print(f"Loading session-{session}, run-{run} MEG ...")
+                    meg= load_meg_ndvar(subject, session, run)
+                    #meg_all.append(meg)
+                    event_table= make_event_table(subject, session, run)
+                    #-----------half
     
-                    t_cut = float(event_table.iloc[-1]['time']) 
-                    meg_trim = meg.sub(time=(0, t_cut))
-                    meg = meg_trim
-
-                meg_all.append(meg)     #meg or Trimed meg for less than one run
-
+                    event_table = event_table.sort_values(by='time').reset_index(drop=True)
     
-                stim1,stim2= make_predictors_for_run(meg, event_table,mod=mod)
-                predictors=[stim1,stim2]
-                stim_all.append(predictors)  
+                    cut = int(200 * size)
+    
+                    if size==0.5 or size==0.25:
+                        
+                        if len(event_table) > cut:
+                            event_table = event_table.iloc[:cut]
+                        else:
+                            print(f"failed event table")
+        
+                        t_cut = float(event_table.iloc[-1]['time']) 
+                        meg_trim = meg.sub(time=(0, t_cut))
+                        meg = meg_trim
+    
+                    meg_all.append(meg)     #meg or Trimed meg for less than one run
+    
+        
+                    stim1,stim2= make_predictors_for_run(meg, event_table,mod="effect")  # <=============== Effect, dummy
+                    predictors=[stim1,stim2]
+                    stim_all.append(predictors)  
+                    
+                args = (meg_all , stim_all, fwd , noise_cov , 0,0.7)
+                kwargs = {'normalize': 'l1','in_place': False,'mu':'auto',
+                          'verbose': True,'n_iter': 10,'n_iterc': 10,'n_iterf': 100}        
+                model = fit_ncrf(*args, **kwargs)  
+                save.pickle(model, modelfile)
+                print(f"\nModel saved to {modelfile}\n")  
                 
-            args = (meg_all , stim_all, fwd , noise_cov , 0,0.7)
-            kwargs = {'normalize': 'l1','in_place': False,'mu':'auto',
-                      'verbose': True,'n_iter': 10,'n_iterc': 10,'n_iterf': 100}        
-            model = fit_ncrf(*args, **kwargs)  
-            save.pickle(model, modelfile)
-            print(f"\nModel saved to {modelfile}\n")  
-            
-        except Exception as e:
-         print(f"\n----------- Error processing {subject}: {e}\n")  
+            except Exception as e:
+             print(f"\n----------- Error processing {subject}: {e}\n")  
 
 # %%
 n_anim = event_table['animate'].sum()          # True values = animate trials
