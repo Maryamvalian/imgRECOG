@@ -895,7 +895,7 @@ for size in sizes:
     avg_m1 = data_avg['mne'][data_avg['model'] == 'M1'][0]
     avg_m2 = data_avg['mne'][data_avg['model'] == 'M2'][0]
     
-    save_mne_figures(avg_m1, avg_m2, size=8)
+    #save_mne_figures(avg_m1, avg_m2, size=size)
     
     #-------------------------------------aw cos
     cos_aw_t, n_used, times = ndvar_AWcosine( avg_m1 , avg_m2 , thr=1e-12, mode="or")
@@ -932,10 +932,7 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# # PLOT samesize
-
-# %%
-size
+# # SAVE PLOT samesize
 
 # %%
 from eelbrain import plot
@@ -952,7 +949,7 @@ def save_mne_figures(avg_m1, avg_m2, size):
     p1.close()
 
     for t in times:
-        f = plot.GlassBrain(avg_m1.sub(time=t), title=f"Inanimate, {t}s")
+        f = plot.GlassBrain(avg_m1.sub(time=t), title=f", {t}s")
         f.save(f"m1_size{size}_glass_{t:.2f}s.png")
         f.close()
 
@@ -964,18 +961,74 @@ def save_mne_figures(avg_m1, avg_m2, size):
     p2.close()
 
     for t in times:
-        f = plot.GlassBrain(avg_m2.sub(time=t), title=f"Animate, {t}s")
+        f = plot.GlassBrain(avg_m2.sub(time=t), title=f", {t}s")
         f.save(f"m2_size{size}_glass_{t:.2f}s.png")
         f.close()
 
-    print(f" Figures saved for size={size}")
+    print(f"✅ Figures saved for size={size}")
 
 
 
 # %%
-avg_m1 = data_avg['mne'][data_avg['model'] == 'M1'][0]
-avg_m2 = data_avg['mne'][data_avg['model'] == 'M2'][0]
+# merge pics
 
-save_mne_figures(avg_m1, avg_m2, size=8)
+# %%
+from PIL import Image
+import os
+
+def merge_mne_figures(size):
+    """
+    Merge all figures (Butterfly + GlassBrain maps) for both M1 and M2
+    into two separate images and save them as:
+        m1_size{size}_merged.png
+        m2_size{size}_merged.png
+    """
+
+    # Define timepoints you used
+    times = [0.12, 0.25, 0.40, 0.50]
+
+    # Helper function for merging one condition
+    def merge_condition(prefix):
+        files = [f"{prefix}_size{size}_butterfly.png"] + \
+                [f"{prefix}_size{size}_glass_{t:.2f}s.png" for t in times]
+
+        existing = [f for f in files if os.path.exists(f)]
+        if not existing:
+            print(f" No figures found for {prefix.upper()}. Skipping.")
+            return
+
+        # Open and align all images
+        images = [Image.open(f) for f in existing]
+
+        # Match widths
+        widths, heights = zip(*(img.size for img in images))
+        max_width = max(widths)
+        total_height = sum(heights)
+
+        merged = Image.new("RGB", (max_width, total_height), "white")
+
+        # Paste vertically
+        y_offset = 0
+        for img in images:
+            merged.paste(img, (0, y_offset))
+            y_offset += img.size[1]
+
+        # Save merged image
+        out_name = f"NCRF-EC{prefix}_size{size}_merged.png"
+        merged.save(out_name)
+        print(f"Saved merged figure: {out_name}")
+
+        # Close individual images
+        for img in images:
+            img.close()
+
+    # Run for M1 (inanimate) and M2 (animate)
+    merge_condition("m1")
+    merge_condition("m2")
+
+
+
+# %%
+merge_mne_figures(6)
 
 # %%
