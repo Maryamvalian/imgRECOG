@@ -600,7 +600,7 @@ def corr_diff(n_subject,size):
 
     for i in range(1, n_subject + 1):
         subject = f"sub-{i:02d}"
-        session = "ImageNet03" if i == 7 else "ImageNet03"
+        session = "ImageNet03" if i == 7 else "ImageNet04"
 
         try:
             inan1, anim1 = load_model_subset(1, subject, session,size)
@@ -715,5 +715,267 @@ plt.legend()
 plt.grid(True, linestyle="--", alpha=0.6)
 plt.tight_layout()
 plt.show()
+
+
+# %%
+#First avg all subjects then corr( avg(M1),avg(M2))
+def load_model_subset(m, subject,size):
+    
+    file_path = f"{model_dir}/{m}-{size}-{subject}.pickle"
+    inan, anim = load.unpickle(file_path)
+    return inan, anim
+
+
+model_dir = "models/samesize/2sesmne"
+sizes = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
+trials_per_subset = 200
+
+summary = []
+
+for size in sizes:
+    cases = []
+
+    for i in range(1, 10):
+        if i in [6, 7]:
+            continue
+
+        subject = f"sub-{i:02d}"
+        try:
+            inan1, anim1 = load_model_subset(1, subject, size)
+            inan2, anim2 = load_model_subset(2, subject,  size)
+            d1 = anim1 - inan1
+            d2 = anim2 - inan2
+            cases.append([subject, "M1", "contrast", d1])
+            cases.append([subject, "M2", "contrast", d2])
+
+        except Exception as e:
+            print(f"Skipping {subject} at size {size}: {e}")
+            continue
+
+    
+    data = Dataset.from_caselist(['subject', 'model', 'animacy', 'mne'], cases)
+    data_avg = data.aggregate('model', drop_bad=True)
+
+    m1 = data_avg['mne'][data_avg['model'] == 'M1'][0].get_data().ravel()
+    m2 = data_avg['mne'][data_avg['model'] == 'M2'][0].get_data().ravel()
+
+    r = np.corrcoef(m1, m2)[0, 1]
+
+    summary.append({
+        "Subset Size": int(size * trials_per_subset),
+        "mean_r": r
+    })
+
+
+# -----------------------------
+df = pd.DataFrame(summary)
+print("\nSummary:")
+print(df)
+
+plt.figure(figsize=(6, 4))
+sns.barplot(
+    data=df,
+    x="Subset Size",
+    y="mean_r",
+    color="maroon",
+    edgecolor="black",
+    width=0.5
+)
+plt.ylim(0, 1)
+plt.ylabel("Pearson r", fontsize=11)
+plt.xlabel("Number of Trials", fontsize=11)
+plt.title("Across-subjects Averaged Models (MNE)- Contrast", fontsize=12)
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.show()
+
+
+# %% [markdown]
+# # AWcosine 
+
+# %%
+def ndvar_AWcosine(nd1, nd2, thr=1e-12, mode="or"):
+    
+    A = np.asarray(nd1.get_data(), dtype=float)  # (V, 3, T)
+    B = np.asarray(nd2.get_data(), dtype=float)
+    if A.shape != B.shape:
+        raise ValueError(f"Shape mismatch: {A.shape} vs {B.shape}")
+
+    V, _, T = A.shape
+    cos_aw_t = np.full(T, np.nan)
+    n_used   = np.zeros(T, dtype=int)
+
+    
+    tmin  = float(nd1.time.tmin)
+    tstep = float(nd1.time.tstep)
+    times = tmin + np.arange(T) * tstep
+
+    for t in range(T):
+        Ai = A[:, :, t]                          
+        Bi = B[:, :, t]
+        aN = np.linalg.norm(Ai, axis=1)         
+        bN = np.linalg.norm(Bi, axis=1)
+
+        if mode.lower() == "and":
+            consider = (aN > thr) & (bN > thr)
+        else: 
+            consider = (aN > thr) | (bN > thr)
+
+        
+        valid = consider & (aN > 0) & (bN > 0)
+        if not np.any(valid):
+            continue
+
+        Ai_v = Ai[valid]
+        Bi_v = Bi[valid]
+        aN_v = aN[valid]
+        bN_v = bN[valid]
+
+        # voxel cosine 
+        dots  = np.einsum('ij,ij->i', Ai_v, Bi_v)   # <A_i, B_i>
+        cos_i = dots / (aN_v * bN_v)                # (n_vox_t,)
+
+        #voxel amplitude weights 
+        w = 0.5 * (aN_v + bN_v)
+        wsum = w.sum()
+        if wsum == 0:
+            continue
+
+        cos_aw_t[t] = float(np.sum(w * cos_i) / wsum)
+        n_used[t]   = int(valid.sum())
+
+    return cos_aw_t, n_used, times
+
+
+# %%
+#First avg all subjects then corr( avg(M1),avg(M2))
+def load_model_subset(m, subject,size):
+    
+    file_path = f"{model_dir}/{m}-{size}-{subject}.pickle"
+    inan, anim = load.unpickle(file_path)
+    return inan, anim
+
+
+model_dir = "models/samesize/2sesmne"
+sizes = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
+trials_per_subset = 200
+
+summary = []
+print("Awcosine:")
+for size in sizes:
+    cases = []
+
+    for i in range(1, 10):
+        if i in [6, 7]:
+            continue
+
+        subject = f"sub-{i:02d}"
+        try:
+            inan1, anim1 = load_model_subset(1, subject, size)
+            inan2, anim2 = load_model_subset(2, subject,  size)
+            d1 = anim1 - inan1
+            d2 = anim2 - inan2
+            cases.append([subject, "M1", "contrast", d1])
+            cases.append([subject, "M2", "contrast", d2])
+
+        except Exception as e:
+            print(f"Skipping {subject} at size {size}: {e}")
+            continue
+
+    
+    data = Dataset.from_caselist(['subject', 'model', 'animacy', 'mne'], cases)
+    data_avg = data.aggregate('model', drop_bad=True)
+
+    m1 = data_avg['mne'][data_avg['model'] == 'M1'][0].get_data().ravel()
+    m2 = data_avg['mne'][data_avg['model'] == 'M2'][0].get_data().ravel()
+
+    r = np.corrcoef(m1, m2)[0, 1]
+
+    #----------------------save plots
+    avg_m1 = data_avg['mne'][data_avg['model'] == 'M1'][0]
+    avg_m2 = data_avg['mne'][data_avg['model'] == 'M2'][0]
+    
+    save_mne_figures(avg_m1, avg_m2, size=8)
+    
+    #-------------------------------------aw cos
+    cos_aw_t, n_used, times = ndvar_AWcosine( avg_m1 , avg_m2 , thr=1e-12, mode="or")
+    print(f"size={size} ,  awcos={cos_aw_t.mean()}")
+
+    
+    #-------------------------------
+    summary.append({
+        "Subset Size": int(size * trials_per_subset),
+        "mean_r": r
+    })
+
+
+# -----------------------------
+df = pd.DataFrame(summary)
+print(f"\nSummary:\n {df}")
+
+
+plt.figure(figsize=(6, 4))
+sns.barplot(
+    data=df,
+    x="Subset Size",
+    y="mean_r",
+    color="maroon",
+    edgecolor="black",
+    width=0.5
+)
+plt.ylim(0, 1)
+plt.ylabel("Pearson r", fontsize=11)
+plt.xlabel("Number of Trials", fontsize=11)
+plt.title("Across-subjects Averaged Models (MNE)- Contrast", fontsize=12)
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.show()
+
+# %% [markdown]
+# # PLOT samesize
+
+# %%
+size
+
+# %%
+from eelbrain import plot
+
+def save_mne_figures(avg_m1, avg_m2, size):
+    
+    times = [0.12, 0.25, 0.4, 0.5]
+
+    # --- M1 (Inanimate) ---
+    p1 = plot.Butterfly(avg_m1.norm('space'), color='k')
+    for t in times:
+        p1.add_vline(t)
+    p1.save(f"m1_size{size}_butterfly.png")
+    p1.close()
+
+    for t in times:
+        f = plot.GlassBrain(avg_m1.sub(time=t), title=f"Inanimate, {t}s")
+        f.save(f"m1_size{size}_glass_{t:.2f}s.png")
+        f.close()
+
+    # --- M2 (Animate) ---
+    p2 = plot.Butterfly(avg_m2.norm('space'), color='k')
+    for t in times:
+        p2.add_vline(t)
+    p2.save(f"m2_size{size}_butterfly.png")
+    p2.close()
+
+    for t in times:
+        f = plot.GlassBrain(avg_m2.sub(time=t), title=f"Animate, {t}s")
+        f.save(f"m2_size{size}_glass_{t:.2f}s.png")
+        f.close()
+
+    print(f" Figures saved for size={size}")
+
+
+
+# %%
+avg_m1 = data_avg['mne'][data_avg['model'] == 'M1'][0]
+avg_m2 = data_avg['mne'][data_avg['model'] == 'M2'][0]
+
+save_mne_figures(avg_m1, avg_m2, size=8)
 
 # %%
