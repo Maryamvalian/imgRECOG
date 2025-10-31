@@ -941,19 +941,17 @@ def save_mne_figures(avg_m1, avg_m2, size):
     
     times = [0.12, 0.25, 0.4, 0.5]
 
-    # --- M1 (Inanimate) ---
     p1 = plot.Butterfly(avg_m1.norm('space'), color='k')
     for t in times:
         p1.add_vline(t)
     p1.save(f"m1_size{size}_butterfly.png")
     p1.close()
-
     for t in times:
         f = plot.GlassBrain(avg_m1.sub(time=t), title=f", {t}s")
         f.save(f"m1_size{size}_glass_{t:.2f}s.png")
         f.close()
 
-    # --- M2 (Animate) ---
+  
     p2 = plot.Butterfly(avg_m2.norm('space'), color='k')
     for t in times:
         p2.add_vline(t)
@@ -965,8 +963,7 @@ def save_mne_figures(avg_m1, avg_m2, size):
         f.save(f"m2_size{size}_glass_{t:.2f}s.png")
         f.close()
 
-    print(f"✅ Figures saved for size={size}")
-
+    print(f"Figures saved for size={size}")
 
 
 # %%
@@ -977,17 +974,9 @@ from PIL import Image
 import os
 
 def merge_mne_figures(size):
-    """
-    Merge all figures (Butterfly + GlassBrain maps) for both M1 and M2
-    into two separate images and save them as:
-        m1_size{size}_merged.png
-        m2_size{size}_merged.png
-    """
-
-    # Define timepoints you used
+    
+   
     times = [0.12, 0.25, 0.40, 0.50]
-
-    # Helper function for merging one condition
     def merge_condition(prefix):
         files = [f"{prefix}_size{size}_butterfly.png"] + \
                 [f"{prefix}_size{size}_glass_{t:.2f}s.png" for t in times]
@@ -997,10 +986,8 @@ def merge_mne_figures(size):
             print(f" No figures found for {prefix.upper()}. Skipping.")
             return
 
-        # Open and align all images
         images = [Image.open(f) for f in existing]
 
-        # Match widths
         widths, heights = zip(*(img.size for img in images))
         max_width = max(widths)
         total_height = sum(heights)
@@ -1025,7 +1012,6 @@ def merge_mne_figures(size):
     # Run for M1 (inanimate) and M2 (animate)
     merge_condition("m1")
     merge_condition("m2")
-
 
 
 # %%
