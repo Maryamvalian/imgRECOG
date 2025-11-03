@@ -846,13 +846,13 @@ ds.tail()
 
 # %%
 #TRIM MEG TO HALF SIZE (SHOULD TRIM MEG ONLY TRIMING STIM doesn't WORKS)
-model_dir = "models/samesize/effect"
+model_dir = "models/samesize/dc"
 sizes = [0.25, 0.5, 1, 2,  3, 4, 6 ,8] 
 
 for size in sizes:
     print(f"=================== Size={size}==================")
     for i in range (1,10):                 #first 9 subjects
-        if i==7 or i==6 :
+        if i==7 or i==6 or i==4:
             continue
            
         
@@ -860,12 +860,7 @@ for size in sizes:
         
         #FWD for Session
         
-        clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
-        clean = mne.io.read_raw_fif(clean_fif, preload=False,verbose=False)
-        info= clean.info           
-        meg_ndvar = load.fiff.raw_ndvar(clean)
-        sensor=meg_ndvar.sensor
-        
+              
         
         ordered_runs = ["02", "01", "03", "06", "04", "05", "07", "08"]
         run_select= size if size>=1 else 1
@@ -874,7 +869,14 @@ for size in sizes:
         
         for model in range (1,3):           #M1, M2
     
-            session="ImageNet03" if model==1 else "ImageNet04"            
+            session="ImageNet03" if model==1 else "ImageNet04"   
+            clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
+            clean = mne.io.read_raw_fif(clean_fif, preload=False,verbose=False)
+            info= clean.info           
+            meg_ndvar = load.fiff.raw_ndvar(clean)
+            sensor=meg_ndvar.sensor
+
+            
             run_list = [r for r in subset]
             #subset=subsets[model-1]
             #print(f"{subset}")
@@ -918,7 +920,7 @@ for size in sizes:
                     meg_all.append(meg)     #meg or Trimed meg for less than one run
     
         
-                    stim1,stim2= make_predictors_for_run(meg, event_table,mod="effect")  # <=============== Effect, dummy
+                    stim1,stim2= make_predictors_for_run(meg, event_table,mod="dummy")  # <=============== Effect, dummy
                     predictors=[stim1,stim2]
                     stim_all.append(predictors)  
                     
