@@ -949,6 +949,7 @@ print(f"Inanimate trials: {n_inanim}")
 # ## Morph
 
 # %%
+mod="effect"
 model_dir="models/samesize/effect"
 sizes = [0.25, 0.5, 1, 2,  3, 4, 6 ,8] 
 
@@ -983,10 +984,7 @@ for size in sizes:
                         general,contrast = hlist[0],hlist[1]
                         anim= general
                         inanim= contrast
-                        """
-                        anim = h_mean+ h_contrast
-                        inanim = h_mean- h_contrast 
-                        """
+                        
                     
                     elif mod=="ortho":
                         h_mean,h_contrast= hlist[0],hlist[1]
