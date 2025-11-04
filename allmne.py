@@ -1168,85 +1168,158 @@ def merge_mne_figures(size):
 # %%
 merge_mne_figures(6)
 
-
 # %% [markdown]
 # # MNE 
 # ## SUB 10 to 30
-# ### Averaged response - R 
+#  
 
 # %%
-#Corr(avg(m1),avg(m2))
-#------------------------------------------
-def load_model_subset(m, subject,size):
-    
-    file_path = f"{model_dir}/{m}-{size}-{subject}.pickle"
-    inan, anim = load.unpickle(file_path)
-    return inan, anim
-
-
-model_dir = "models/samesize/2sesmne"
+#save models
+oot_epochs = Path("/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/epochs")
+#-------------------------------------------
 sizes = [0.25, 0.5, 1, 2]
-trials_per_subset = 200
-
-summary = []
-
+#------------------------------------------
+per_run=200
+session="ImageNet01"      #10 to 30 
+#----------
+def resize_epochs(epochs, n):
+    #for balancing the condition trial#
+    
+    if len(epochs) >= n:
+        return epochs[:n]
+    else:
+        idx = np.random.choice(len(epochs), n, replace=True)
+        return epochs[idx]
+#--------------------
 for size in sizes:
-    cases = []
-
+    
+    print(f"========= size= {size}=================================== ")
+    cut_per_cond=int(size * per_run/2)
     for i in range(10, 31):
         
         subject = f"sub-{i:02d}"
-        try:
-            inan1, anim1 = load_model_subset(1, subject, size)
-            inan2, anim2 = load_model_subset(2, subject,  size)
-            d1 = anim1 - inan1
-            d2 = anim2 - inan2
-            cases.append([subject, "M1", "contrast", d1])
-            cases.append([subject, "M2", "contrast", d2])
-
-        except Exception as e:
-            print(f"Skipping {subject} at size {size}: {e}")
-            continue
-
+        
+        epo_file = root_epochs / f"{subject}_meg_epo.fif"
+        
     
-    data = Dataset.from_caselist(['subject', 'model', 'animacy', 'mne'], cases)
-    data_avg = data.aggregate('model', drop_bad=True)
+        ordered_runs = {
+            1: ["02", "05"],  
+            2: ["03", "01"] 
+            }
+        cut= size if size>=1 else 1
+                
+            
+        for model in range (1,3):       #M1,M2
 
-    m1 = data_avg['mne'][data_avg['model'] == 'M1'][0].get_data().ravel()
-    m2 = data_avg['mne'][data_avg['model'] == 'M2'][0].get_data().ravel()
-
-    r = np.corrcoef(m1, m2)[0, 1]
-
-    summary.append({
-        "Subset Size": int(size * trials_per_subset),
-        "pearson_r": r
-    })
-
-
-# -----------------------------
-df = pd.DataFrame(summary)
-print("\nSummary:")
-print(df)
-
-plt.figure(figsize=(6, 4))
-sns.barplot(
-    data=df,
-    x="Subset Size",
-    y="pearson_r",
-    color="maroon",
-    edgecolor="black",
-    width=0.5
-)
-plt.ylim(0, 1)
-plt.ylabel("Pearson r", fontsize=11)
-plt.xlabel("Number of Trials", fontsize=11)
-plt.title("Across-subjects Averaged Models (MNE)- Contrast", fontsize=12)
-plt.grid(axis="y", linestyle="--", alpha=0.5)
-plt.tight_layout()
-plt.show()
+            run_subset = ordered_runs[model][:int(cut)]   
+            run_list = [int(r) for r in run_subset]    
+    
+            
+            modelfile = f"models/samesize/2sesmne/{model}-{size}-{subject}.pickle"
+        
+            if os.path.exists(modelfile):
+                print(f"{model}-{size}-{subject} loaded from file.")
+                continue
+            try:
+                print(f"{subject}, Run= {run_list}, Session={session}")
+                epochs = mne.read_epochs(str(epo_file), preload=True, verbose=False)
+                clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
+                clean = mne.io.read_raw_fif(clean_fif, preload=True, verbose=False)
+                
+                epochs_resamp = epochs.copy().resample(100, npad="auto", verbose=False) 
+                    
+                meta = epochs_resamp.metadata
+                #sub-03 meta data is not boolean convert to boolean 
+                if i==3:
+                    meta["stim_is_animate"] = meta["stim_is_animate"].apply(lambda x: True if str(x).lower() == "true" else False)
+            
+                    
+                mask_in = (
+                    (meta["subject"] == i) &
+                    (meta["session"] == session) &   
+                    (meta["run"].isin(run_list)) &           #(meta["run"] == int(run))&
+                    (meta["stim_is_animate"] ==False)
+                )
+    
+                mask_an = (
+                    (meta["subject"]== i) &
+                    (meta["session"]== session) & 
+                    (meta["run"].isin(run_list)) & 
+                    (meta["stim_is_animate"] ==True)
+                )
+            
+                epochs_in = epochs_resamp[mask_in] # Not balancing
+                epochs_an = epochs_resamp[mask_an]
+                print(f"Befor Balancing: Animate={len(epochs_an)},Inanim={len(epochs_in)} ")
+               
+                
+                
+                epochs_an = resize_epochs(epochs_resamp[mask_an], cut_per_cond)
+                epochs_in = resize_epochs(epochs_resamp[mask_in], cut_per_cond)        
+                print(f"BALANCED : Animate={len(epochs_an)}, Inanim={len(epochs_in)}")
+                
+        
+        
+                evoked_anim= epochs_an.average()
+                evoked_inanim= epochs_in.average()
+                
+                src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-lr-src.fif"        #not merged l,R
+                src = mne.read_source_spaces(str(src_file),verbose=False)
+            
+                bem_sol_fif=f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
+                bem_sol = mne.read_bem_solution(bem_sol_fif,verbose=False)
+                
+                trans_fif= f"{root}/derivatives/trans/{subject}-{session}-trans.fif"
+                trans=mne.read_trans(trans_fif)
+        
+                print("   Computing FWD")
+                fwd = mne.make_forward_solution(
+                        clean.info, trans, src, bem_sol,
+                        meg=True, eeg=False, mindist=0, verbose=False
+                    )
+            
+                          
+                print("   Inverse...")
+                inv = mne.minimum_norm.make_inverse_operator(
+                    info=clean.info,
+                    forward=fwd,
+                    noise_cov=noise_cov,
+                    loose=1.0,    
+                    depth=0.8,
+                    fixed=False,
+                    verbose=False,
+                )
+                
+                snr = 3.0
+                lambda2 = 1.0 / snr**2
+                
+                
+                stc_anim_vec = mne.minimum_norm.apply_inverse(
+                    evoked_anim, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False)
+                
+                stc_inan_vec = mne.minimum_norm.apply_inverse(
+                    evoked_inanim, inv, lambda2=lambda2, method='MNE', pick_ori='vector', verbose=False)
+        
+                
+                print(f"Morphing ...")
+                print("   morphing 1/2")
+                R,L,anim = morph_hemi(stc_anim_vec, subject=subject, subject_to="fsaverage2",
+                                      subjects_dir=subjects_dir, src_tag="vol-7")
+                print("   morphing 2/2")
+                R_in,L_in,inan = morph_hemi(stc_inan_vec, subject=subject, subject_to="fsaverage2",
+                                      subjects_dir=subjects_dir, src_tag="vol-7")
+                
+                save.pickle((inan,anim), modelfile)
+                          
+                
+                                 
+                print(f"==>M{model}-{subject } done!")
+            except Exception as e:
+                print(f"Error processing {subject}: {e}")   
+            
 
 # %%
-
+#read models and plot results
 model_dir = "models/samesize/2sesmne"
 sizes = [0.25, 0.5, 1, 2]
 trials_per_subset = 200
