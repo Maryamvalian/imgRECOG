@@ -490,9 +490,9 @@ def resize_epochs(epochs, n):
 #--------------------
 for size in sizes:
     
-    print(f"========= size= {size}====== ")
+    print(f"========= size= {size}=================================== ")
     cut_per_cond=int(size * per_run/2)
-    for i in range(10, 11):
+    for i in range(10, 31):
         
         subject = f"sub-{i:02d}"
         
@@ -610,7 +610,7 @@ for size in sizes:
                           
                 
                                  
-                print(f"=====>M{model}-{subject } done!")
+                print(f"==>M{model}-{subject } done!")
             except Exception as e:
                 print(f"Error processing {subject}: {e}")   
             
@@ -1167,5 +1167,247 @@ def merge_mne_figures(size):
 
 # %%
 merge_mne_figures(6)
+
+
+# %% [markdown]
+# # MNE 
+# ## SUB 10 to 30
+# ### Averaged response - R 
+
+# %%
+#Corr(avg(m1),avg(m2))
+#------------------------------------------
+def load_model_subset(m, subject,size):
+    
+    file_path = f"{model_dir}/{m}-{size}-{subject}.pickle"
+    inan, anim = load.unpickle(file_path)
+    return inan, anim
+
+
+model_dir = "models/samesize/2sesmne"
+sizes = [0.25, 0.5, 1, 2]
+trials_per_subset = 200
+
+summary = []
+
+for size in sizes:
+    cases = []
+
+    for i in range(10, 31):
+        
+        subject = f"sub-{i:02d}"
+        try:
+            inan1, anim1 = load_model_subset(1, subject, size)
+            inan2, anim2 = load_model_subset(2, subject,  size)
+            d1 = anim1 - inan1
+            d2 = anim2 - inan2
+            cases.append([subject, "M1", "contrast", d1])
+            cases.append([subject, "M2", "contrast", d2])
+
+        except Exception as e:
+            print(f"Skipping {subject} at size {size}: {e}")
+            continue
+
+    
+    data = Dataset.from_caselist(['subject', 'model', 'animacy', 'mne'], cases)
+    data_avg = data.aggregate('model', drop_bad=True)
+
+    m1 = data_avg['mne'][data_avg['model'] == 'M1'][0].get_data().ravel()
+    m2 = data_avg['mne'][data_avg['model'] == 'M2'][0].get_data().ravel()
+
+    r = np.corrcoef(m1, m2)[0, 1]
+
+    summary.append({
+        "Subset Size": int(size * trials_per_subset),
+        "pearson_r": r
+    })
+
+
+# -----------------------------
+df = pd.DataFrame(summary)
+print("\nSummary:")
+print(df)
+
+plt.figure(figsize=(6, 4))
+sns.barplot(
+    data=df,
+    x="Subset Size",
+    y="pearson_r",
+    color="maroon",
+    edgecolor="black",
+    width=0.5
+)
+plt.ylim(0, 1)
+plt.ylabel("Pearson r", fontsize=11)
+plt.xlabel("Number of Trials", fontsize=11)
+plt.title("Across-subjects Averaged Models (MNE)- Contrast", fontsize=12)
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.show()
+
+# %%
+
+model_dir = "models/samesize/2sesmne"
+sizes = [0.25, 0.5, 1, 2]
+trials_per_subset = 200
+
+
+def load_model_subset(m, subject, size):
+    file_path = f"{model_dir}/{m}-{size}-{subject}.pickle"
+    inan, anim = load.unpickle(file_path)
+    return inan, anim
+
+
+summary_avg = []
+
+for size in sizes:
+    cases = []
+
+    for i in range(10, 31):
+        subject = f"sub-{i:02d}"
+        try:
+            inan1, anim1 = load_model_subset(1, subject, size)
+            inan2, anim2 = load_model_subset(2, subject, size)
+            d1 = anim1 - inan1
+            d2 = anim2 - inan2
+            cases.append([subject, "M1", "contrast", d1])
+            cases.append([subject, "M2", "contrast", d2])
+
+        except Exception as e:
+            print(f"Skipping {subject} at size {size}: {e}")
+            continue
+
+    data = Dataset.from_caselist(["subject", "model", "animacy", "mne"], cases)
+    data_avg = data.aggregate("model", drop_bad=True)
+
+    m1 = data_avg["mne"][data_avg["model"] == "M1"][0].get_data().ravel()
+    m2 = data_avg["mne"][data_avg["model"] == "M2"][0].get_data().ravel()
+
+    r = np.corrcoef(m1, m2)[0, 1]
+
+    summary_avg.append({
+        "Subset Size": int(size * trials_per_subset),
+        "pearson_r": r
+    })
+
+df_avg = pd.DataFrame(summary_avg)
+
+
+contrast_results = []
+anim_results = []
+inan_results = []
+
+for size in sizes:
+    contrast_rs, anim_rs, inan_rs = [], [], []
+
+    for i in range(10, 31):
+        subject = f"sub-{i:02d}"
+        try:
+            inan1, anim1 = load_model_subset(1, subject, size)
+            inan2, anim2 = load_model_subset(2, subject, size)
+
+            a1 = anim1.get_data().ravel()
+            a2 = anim2.get_data().ravel()
+            i1 = inan1.get_data().ravel()
+            i2 = inan2.get_data().ravel()
+
+            r_anim = np.corrcoef(a1, a2)[0, 1]
+            r_inan = np.corrcoef(i1, i2)[0, 1]
+            r_contrast = np.corrcoef(a1 - i1, a2 - i2)[0, 1]
+
+            anim_rs.append(r_anim)
+            inan_rs.append(r_inan)
+            contrast_rs.append(r_contrast)
+
+        except Exception as e:
+            print(f"Skipping {subject} at size {size}: {e}")
+            continue
+
+    if contrast_rs:
+        contrast_results.append({
+            "Subset Size": int(size * trials_per_subset),
+            "Mean Pearson r": np.mean(contrast_rs),
+            "N Subjects": len(contrast_rs)
+        })
+    if anim_rs:
+        anim_results.append({
+            "Subset Size": int(size * trials_per_subset),
+            "Mean Pearson r": np.mean(anim_rs),
+            "N Subjects": len(anim_rs)
+        })
+    if inan_rs:
+        inan_results.append({
+            "Subset Size": int(size * trials_per_subset),
+            "Mean Pearson r": np.mean(inan_rs),
+            "N Subjects": len(inan_rs)
+        })
+
+df_contrast = pd.DataFrame(contrast_results)
+df_anim = pd.DataFrame(anim_results)
+df_inan = pd.DataFrame(inan_results)
+
+#plot 1
+plt.figure(figsize=(6, 4))
+sns.barplot(
+    data=df_avg,
+    x="Subset Size",
+    y="pearson_r",
+    color="maroon",
+    edgecolor="black",
+    width=0.5
+)
+plt.ylim(0, 1)
+plt.ylabel("Pearson r", fontsize=11)
+plt.xlabel("Number of Trials", fontsize=11)
+plt.title("MNE-Averaged Models – Contrast (21 sbjs)", fontsize=12)
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.show()
+
+print(df_avg)
+#plot 2
+plt.figure(figsize=(6, 4))
+sns.barplot(
+    data=df_contrast,
+    x="Subset Size",
+    y="Mean Pearson r",
+    color="maroon",
+    edgecolor="black",
+    width=0.5
+)
+plt.ylim(0, 1)
+plt.ylabel("Mean Pearson r", fontsize=11)
+plt.xlabel("Number of Trials", fontsize=11)
+plt.title("MNE-Average correlation-contrast(21 sbjs)", fontsize=12)
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.show()
+
+print(df_contrast)
+#plot3
+plt.figure(figsize=(6, 4))
+df_anim["Condition"] = "Animate"
+df_inan["Condition"] = "Inanimate"
+df_combined = pd.concat([df_anim, df_inan], ignore_index=True)
+
+sns.barplot(
+    data=df_combined,
+    x="Subset Size",
+    y="Mean Pearson r",
+    hue="Condition",
+    edgecolor="black",
+    palette={"Animate": "#66BB66", "Inanimate": "#3399FF"},
+    width=0.5
+)
+plt.ylim(0, 1)
+plt.ylabel("Mean Pearson r", fontsize=11)
+plt.xlabel("Number of Trials", fontsize=11)
+plt.title("MNE-Average Correlation (21 sbjs) ", fontsize=12)
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.legend(title="", loc="upper left", frameon=False)
+plt.tight_layout()
+plt.show()
+
+print(df_combined)
 
 # %%
