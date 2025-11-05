@@ -63,7 +63,7 @@ def compute_fwd_ndvar(subject, session,subject_dir,meg_info,sensor):
     fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
     fwd_file.parent.mkdir(parents=True, exist_ok=True)
     mne.write_forward_solution(str(fwd_file), fwd, overwrite=True, verbose=False)
-    print(f"   Saved FWD to {fwd_file}")
+    #print(f"   Saved FWD to {fwd_file}")
 
         
     #convert to ndvar
@@ -1047,13 +1047,15 @@ for size in sizes:
 # # R_Data from morphed files
 
 # %%
-model_dir="models/samesize"
+#one size- diffrent subj plot
+"""
+model_dir="models/samesize/dc"
 n_subject=9                  #Loop sub-01,sub-02,...,sub-n_subjects
 size=4
 
 def load_model_subset(subset,subject,session,size):
     
-    morphed_file = f"{model_dir}/M{subset}-{size}-{subject}-{session}-ncrf.pickle"
+    morphed_file = f"{model_dir}/M{subset}-{size}-{subject}.pickle"
     inan, anim = load.unpickle(morphed_file)
     return inan, anim
 
@@ -1129,14 +1131,15 @@ print(f" anim:{R_data_anim}")
 
 print(f" inanim:{R_data_inanim}")
 print(f" \n\nMean \nanim:{R_data_anim.mean().round(2)}\ninanim:{R_data_inanim.mean().round(2)}")
+"""
 
 # %% [markdown]
 # # TRail size data set
 
 # %%
-model_dir = "models/samesize"
+model_dir = "models/samesize/dc"
 n_subject = 9
-sizes = [0.25, 0.5, 1, 2, 3, 4, 8]   
+sizes = [0.25, 0.5, 1, 2, 3, 4,6 , 8]   
 trials_per_subset = 200
 #------------------------
 
@@ -1175,7 +1178,7 @@ sns.barplot(
 
 plt.ylim(0, 1.0)
 plt.ylabel("Mean Pearson r")
-plt.title("NCRF Model Consistency Across Subset Sizes")
+plt.title("NCRF_DC (9 subjects)")
 plt.legend(bbox_to_anchor=(1.02, 1), loc="upper left")
 plt.grid(axis="y", linestyle="--", alpha=0.5)
 plt.tight_layout()
@@ -1185,10 +1188,9 @@ plt.show()
 # # Paired Test on Tiral size condition
 
 # %%
-model_dir = "models/samesize"
+model_dir = "models/samesize/dc"
 n_subject = 9
-sizes = [0.25, 0.5, 1, 2, 4, 8]    
-trails_per_run = 200
+sizes = [0.25, 0.5, 1, 2, 4, 6]
 
 
 # --------------------
@@ -1218,7 +1220,7 @@ R_inan_all = np.column_stack(all_R_inanim)
 Z_anim_all = fisher_r_to_z(R_anim_all)
 Z_inan_all = fisher_r_to_z(R_inan_all)
 
-subset_sizes = [int(size * trails_per_run) for size in sizes]                #size*200
+subset_sizes = [int(size * 200) for size in sizes]                #size*200
 
 
 
@@ -1281,9 +1283,9 @@ def corr_diff(n_subject,size):
     return R_data, Z_data
 
 #------------------------------------------
-model_dir = "models/samesize"
+model_dir = "models/samesize/dc"
 n_subject = 9
-sizes = [0.25, 0.5, 1, 2, 3, 4, 8]   
+sizes = [0.25, 0.5, 1, 2, 3, 4, 6]   
 trials_per_subset = 200
 #------------------------
 
@@ -1382,5 +1384,101 @@ plt.title("Within Subject :Contrast Consistency- Effect NCRF", fontsize=12)
 plt.grid(axis="y", linestyle="--", alpha=0.5)
 plt.tight_layout()
 plt.show()
+
+# %% [markdown]
+# # SUBJECT 10 to 30
+# ## NCRF-DC
+#
+
+# %%
+session="ImageNet01"      #10 to 30 
+model_dir = "models/samesize/dc"       #<----------- Dummy
+sizes = [0.25, 0.5, 1, 2] 
+
+for size in sizes:
+    print(f"=================== Size={size}==================")
+    ordered_runs = {
+                1: ["02", "05"],  
+                2: ["03", "01"] 
+                }
+    order_cut= size if size>=1 else 1
+    
+    for i in range (10,31):                 #10 to 30
+                
+        subject = f"sub-{i:02d}"  
+        print(f"Models for {subject}:")      
+          
+        
+        for model in range (1,3):           #M1, M2
+
+            run_list = ordered_runs[model][:int(order_cut)]   
+            print(f"  M{model}:{run_list}")
+            
+    
+              
+            clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
+            clean = mne.io.read_raw_fif(clean_fif, preload=False,verbose=False)
+            info= clean.info           
+            meg_ndvar = load.fiff.raw_ndvar(clean)
+            sensor=meg_ndvar.sensor
+
+            
+            
+            modelfile = f"{model_dir}/{model}-{size}-{subject}.pickle"
+            morphfile = f"{model_dir}/M{model}-{size}-{subject}.pickle"
+            if os.path.exists(modelfile):
+                print(f"{model}-{size}-{subject} model file exists.")
+                continue
+            if os.path.exists(morphfile):
+                print(f"{model}-{size}-{subject} Morph file exists.")
+                continue
+            try:        
+                print(f"  computing fwd for {subject}-{session}... ")
+                fwd = compute_fwd_ndvar(subject, session,subjects_dir,info,sensor)
+                   
+                meg_all = []
+                stim_all = []
+                for run in run_list:
+                    
+                    #print(f"  Loading session-{session}, run-{run} MEG ...")
+                    meg= load_meg_ndvar(subject, session, run)
+                    #meg_all.append(meg)
+                    event_table= make_event_table(subject, session, run)
+                    
+                    #trim MEG if size<1
+                    event_table = event_table.sort_values(by='time').reset_index(drop=True)
+                    cut = int(200 * size)
+    
+                    if size==0.5 or size==0.25:
+                        
+                        if len(event_table) > cut:
+                            event_table = event_table.iloc[:cut]
+                        else:
+                            print(f"failed event table")
+        
+                        t_cut = float(event_table.iloc[-1]['time']) 
+                        meg_trim = meg.sub(time=(0, t_cut))
+                        meg = meg_trim
+    
+                    meg_all.append(meg)     #meg or Trimed meg for less than one run
+    
+        
+                    stim1,stim2= make_predictors_for_run(meg, event_table,mod="dummy")  # <=============== Effect, dummy
+                    predictors=[stim1,stim2]
+                    stim_all.append(predictors)  
+                    
+                args = (meg_all , stim_all, fwd , noise_cov , 0,0.7)
+                kwargs = {'normalize': 'l1','in_place': False,'mu':'auto',
+                          'verbose': True,'n_iter': 10,'n_iterc': 10,'n_iterf': 100}        
+                model = fit_ncrf(*args, **kwargs)  
+                save.pickle(model, modelfile)
+                print(f"\nModel saved to {modelfile}\n")  
+                
+            except Exception as e:
+             print(f"\n----------- Error processing {subject}: {e}\n")  
+            
+
+# %%
+run_list
 
 # %%
