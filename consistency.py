@@ -1406,13 +1406,13 @@ for size in sizes:
     for i in range (10,31):                 #10 to 30
                 
         subject = f"sub-{i:02d}"  
-        print(f"Models for {subject}:")      
+        #print(f"Models for {subject}:")      
           
         
         for model in range (1,3):           #M1, M2
 
             run_list = ordered_runs[model][:int(order_cut)]   
-            print(f"  M{model}:{run_list}")
+            #print(f"  M{model}:{run_list}")
             
     
               
@@ -1480,5 +1480,145 @@ for size in sizes:
 
 # %%
 run_list
+
+
+# %% [markdown]
+# # analysis
+
+# %%
+def load_model_subset(m, subject,size):
+    
+    file_path = f"{model_dir}/{m}-{size}-{subject}.pickle"
+    inan, anim = load.unpickle(file_path)
+    return inan, anim
+
+
+model_dir = "models/samesize/2sesmne"
+sizes = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
+trials_per_subset = 200
+
+summary = []
+print("Awcosine:")
+for size in sizes:
+    cases = []
+
+    for i in range(1, 10):
+        if i in [4, 6, 7]:
+            continue
+
+        subject = f"sub-{i:02d}"
+        try:
+            inan1, anim1 = load_model_subset(1, subject, size)
+            inan2, anim2 = load_model_subset(2, subject,  size)
+            d1 = anim1 - inan1
+            d2 = anim2 - inan2
+            cases.append([subject, "M1", "contrast", d1])
+            cases.append([subject, "M2", "contrast", d2])
+
+        except Exception as e:
+            print(f"Skipping {subject} at size {size}: {e}")
+            continue
+
+    
+    data = Dataset.from_caselist(['subject', 'model', 'animacy', 'mne'], cases)
+    data['mne_norm'] = [nd.norm('space') for nd in data['mne']]
+    res_m1 = testnd.TTestOneSample(data.sub('model == "M1"')['mne_norm'])
+    res_m2 = testnd.TTestOneSample(data.sub('model == "M2"')['mne_norm'])
+    tmap_m1 = res_m1.t
+    tmap_m2 = res_m2.t
+    
+    #plot.GlassBrain(tmap_m1,title="T-map M1")
+    #plot.GlassBrain(tmap_m2,title="T-map M2")
+
+    m1x = tmap_m1.x.ravel()
+    m2x = tmap_m2.x.ravel()
+    r_tmaps = np.corrcoef(m1x, m2x)[0, 1]
+
+
+    #----------------T2-map
+    res_m1_t2 = testnd.Vector(data.sub('model == "M1"')['mne'],samples=1000)
+    res_m2_t2 = testnd.Vector(data.sub('model == "M2"')['mne'],samples=1000)
+    t2map_m1 = res_m1_t2.t2
+    t2map_m2 = res_m2_t2.t2
+
+    m1_t2 = t2map_m1.x.ravel()
+    m2_t2 = t2map_m2.x.ravel()
+    r_t2 = np.corrcoef(m1_t2, m2_t2)[0, 1]
+    
+    summary.append({
+        "Subset Size": int(size * trials_per_subset),
+        "Tmap_Corr": r_tmaps,
+        "T2map_Corr": r_t2
+    })
+
+#----------
+df_t_mne = pd.DataFrame(summary)
+print("\nSummary MNe:")
+print(df_t_mne.round(3))
+
+# %%
+model_dir = "models/samesize/dc"
+sizes = [0.25, 0.5, 1, 2, 3, 4, 6,8]
+trials_per_subset = 200
+
+summary = []
+for size in sizes:
+    
+    cases = []
+    for i in range(1,10):
+        if i in [4,6,7]:
+            continue
+
+        subject = f"sub-{i:02d}"
+        m1_file = f"{model_dir}/M1-{size}-{subject}.pickle"
+        m2_file = f"{model_dir}/M2-{size}-{subject}.pickle"
+
+        if not (os.path.exists(m1_file) and os.path.exists(m2_file)):
+            print(f"Skipping {subject}: missing file(s)")
+            continue
+
+        in1,an1 = load.unpickle(m1_file)
+        in2,an2 = load.unpickle(m2_file)
+        contrast1 = an1 - in1
+        contrast2 = an2 - in2
+        cases.append([subject, "M1", "contrast", contrast1])
+        cases.append([subject, "M2", "contrast", contrast2])
+
+    data = Dataset.from_caselist(['subject', 'model', 'animacy', 'ncrf'], cases)
+
+    data['ncrf_norm'] = [nd.norm('space') for nd in data['ncrf']]
+    res_m1 = testnd.TTestOneSample(data.sub('model == "M1"')['ncrf_norm'])
+    res_m2 = testnd.TTestOneSample(data.sub('model == "M2"')['ncrf_norm'])
+    tmap_m1 = res_m1.t
+    tmap_m2 = res_m2.t
+    
+    #plot.GlassBrain(tmap_m1,title="T-map M1")
+    #plot.GlassBrain(tmap_m2,title="T-map M2")
+
+    eff_m1x = tmap_m1.x.ravel()
+    eff_m2x = tmap_m2.x.ravel()
+    r_tmaps = np.corrcoef(eff_m1x, eff_m2x)[0, 1]
+
+
+    #----------------T2-map
+    res_m1_t2 = testnd.Vector(data.sub('model == "M1"')['ncrf'],samples=1000)
+    res_m2_t2 = testnd.Vector(data.sub('model == "M2"')['ncrf'],samples=1000)
+    t2map_m1 = res_m1_t2.t2
+    t2map_m2 = res_m2_t2.t2
+
+    m1_t2 = t2map_m1.x.ravel()
+    m2_t2 = t2map_m2.x.ravel()
+    r_t2 = np.corrcoef(m1_t2, m2_t2)[0, 1]
+    
+    summary.append({
+        "Subset Size": int(size * trials_per_subset),
+        "Tmap_Corr": r_tmaps,
+        "T2map_Corr": r_t2
+    })
+
+#----------
+df_t_ncrfdc = pd.DataFrame(summary)
+print("\nSummary NCRF-DC:")
+print(df_t_ncrfec.round(3))
 
 # %%
