@@ -1478,10 +1478,6 @@ for size in sizes:
              print(f"\n----------- Error processing {subject}: {e}\n")  
             
 
-# %%
-run_list
-
-
 # %% [markdown]
 # # analysis
 
