@@ -991,11 +991,17 @@ for size in sizes:
                         anim = h_mean+ code_anim* h_contrast
                         inanim = h_mean+ code_inanim* h_contrast
                     
-                    #morph  
+                    #Read forward
+                    if i > 9:
+                        session = "ImageNet01"
+                    elif model == 1:
+                        session = "ImageNet03"
+                    else:
+                        session = "ImageNet04"
                     fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
                     fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
                     
-                    
+                    #morph 
                     stc_vec_anim = ndvar_merged_to_stc_lr(
                         
                         ndvar=anim,
