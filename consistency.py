@@ -1625,6 +1625,8 @@ print("\nSummary NCRF-DC:")
 print(df_t_ncrfec.round(3))
 
 # %%
+# ALL Anslysis for MNE, NCRF-DC
+# (subjects 10-31)
 sizes = [0.25, 0.5, 1, 2]
 trials_per_subset = 200
 dirs = {
@@ -1739,3 +1741,5 @@ def compute_results(method_name, model_dir):
 results_ncrf = compute_results("NCRF-DC", dirs["NCRF-DC"])
 results_mne = compute_results("MNE", dirs["MNE"])
 
+
+# %%
