@@ -311,17 +311,6 @@ for t in times:
 # ## BALANCED DATA
 
 # %%
-"""
-sbj="sub-06"
-epo_file = root_epochs / f"{sbj}_meg_epo.fif"
-epochs111 = mne.read_epochs(str(epo_file), preload=True, verbose=False)
-epochs_resamp111 = epochs111.copy().resample(100, npad="auto", verbose=False) 
-meta111 = epochs_resamp111.metadata
-meta4 = meta111[ (meta111["session"] == "ImageNet04")]
-meta4
-"""
-
-# %%
 root_epochs = Path("/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/epochs")
 #-------------------------------------------
 #sizes = [0.25, 0.5, 1, 2,  4, 6 ,8]      #for i<10
@@ -554,6 +543,49 @@ n_subject = 9
 sizes = [0.25, 0.5, 1, 2,3, 4, 6, 8]   
 trials_per_subset = 200
 #------------------------
+model_dir="models/samesize/2sesmne"
+n_subject=9                  #Loop sub-01,sub-02,...,sub-n_subjects
+size=6
+
+def load_model_subset(subset,subject,session,size):
+    
+    morphed_file = f"{model_dir}/{subset}-{size}-{subject}.pickle"
+    inan, anim = load.unpickle(morphed_file)
+    return inan, anim
+
+#-----------
+def corr_data(animacy, n_subject,size):
+    
+    R_data = np.full(n_subject, np.nan)
+
+    def fisher_r_to_z(r):
+        r = np.clip(r, -0.999999, 0.999999)  # avoid infinities
+        return 0.5 * np.log((1 + r) / (1 - r))
+
+    for i in range(1, n_subject + 1):
+        subject = f"sub-{i:02d}"
+        #session = "ImageNet04" if i == 7 else "ImageNet03" - renamed model to imagenet03 even 04
+        session="ImageNet03"
+
+        try:
+                
+    
+            inan1, anim1 = load_model_subset(1, subject, session,size)
+            inan2, anim2 = load_model_subset(2, subject, session,size)
+            m1= anim1 if animacy == "anim" else inan1
+            m2= anim2 if animacy == "anim" else inan2
+            d1= np.asarray(m1.get_data()).reshape(-1)
+            d2= np.asarray(m2.get_data()).reshape(-1)
+    
+            r = np.corrcoef(d1, d2)[0, 1]
+            #print(f"{subject}: Corr(m1,m2)={r:.2f}, Fisher_z={fisher_r_to_z(r):.2f}")
+            R_data[i - 1] = r
+        except Exception as e:
+            print(f"failed: {e}")
+
+    Z_data = fisher_r_to_z(R_data)
+    return R_data, Z_data
+#--------------
 
 results = []
 for size in sizes:
@@ -579,7 +611,7 @@ print(df_animacy)
 # Melt for seaborn plotting
 df_melted = df_animacy.melt(id_vars="Subset Size", var_name="Animacy", value_name="Mean r")
 #plot
-plt.figure(figsize=(6, 4))
+plt.figure(figsize=(7, 4))
 sns.barplot(
     data=df_melted,
     x="Subset Size", y="Mean r",
@@ -590,9 +622,25 @@ sns.barplot(
 
 plt.ylim(0, 1.0)
 plt.ylabel("Mean Pearson r")
-plt.title("MNE Model Consistency ")
+plt.title("MNE (9subjects) ")
 plt.legend(bbox_to_anchor=(1.02, 1), loc="upper left")
 plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.show()
+
+# %%
+plt.figure(figsize=(7, 4))
+plt.plot(df_animacy["Subset Size"], df_animacy["Animate"],
+         marker='o', label="Animate", color="#66BB66")
+plt.plot(df_animacy["Subset Size"], df_animacy["Inanimate"],
+         marker='o', label="Inanimate", color="#3399FF")
+
+plt.title("MNE (9 subjects)")
+plt.xlabel("Subset Size (number of trials)")
+plt.ylabel("Mean Pearson r (M1 vs M2)")
+plt.grid(True, linestyle='--', alpha=0.6)
+plt.ylim(0, 1)
+plt.legend()
 plt.tight_layout()
 plt.show()
 
@@ -663,7 +711,7 @@ sns.barplot(
 )
 plt.ylim(0, 1.0)
 plt.ylabel("Mean Pearson r")
-plt.title("Consistency of the pired difference (Animate-Inanimate)")
+plt.title("MNE (9subject) averaged correlatins")
 plt.grid(axis="y", linestyle="--", alpha=0.5)
 plt.tight_layout()
 plt.show()
@@ -1335,5 +1383,13 @@ plt.tight_layout()
 plt.show()
 
 print(df_combined)
+
+# %%
+
+# %%
+
+# %%
+
+# %%
 
 # %%
