@@ -1625,3 +1625,117 @@ print("\nSummary NCRF-DC:")
 print(df_t_ncrfec.round(3))
 
 # %%
+sizes = [0.25, 0.5, 1, 2]
+trials_per_subset = 200
+dirs = {
+    "NCRF-DC": "models/samesize/dc",
+    "MNE": "models/samesize/2sesmne"
+}
+
+#---------------------------------
+def load_model_subset(model_dir, m, subject, size):
+    
+    file_path = f"{model_dir}/M{m}-{size}-{subject}.pickle" if "dc" in model_dir else f"{model_dir}/{m}-{size}-{subject}.pickle"
+    inan, anim = load.unpickle(file_path)
+    return inan, anim
+
+def compute_results(method_name, model_dir):
+    print(f"\nProcessing {method_name} results...")
+    summary_avg = []
+    contrast_results, anim_results, inan_results, summary_tmaps = [], [], [], []
+
+    for size in sizes:
+        cases = []
+        contrast_rs, anim_rs, inan_rs = [], [], []
+
+        for i in range(10, 31):
+            subject = f"sub-{i:02d}"
+            try:
+                inan1, anim1= load_model_subset(model_dir, 1, subject, size)
+                inan2, anim2 =load_model_subset(model_dir, 2, subject, size)
+                d1 = anim1-inan1
+                d2 = anim2-inan2
+                cases.append([subject,"M1","contrast",d1])
+                cases.append([subject,"M2","contrast",d2])
+
+                a1=anim1.get_data().ravel()
+                a2=anim2.get_data().ravel()
+                i1=inan1.get_data().ravel()
+                i2=inan2.get_data().ravel()
+
+                r_anim= np.corrcoef(a1, a2)[0, 1]
+                r_inan =np.corrcoef(i1, i2)[0, 1]
+                r_contrast =np.corrcoef(a1-i1  , a2-i2)[0, 1]
+
+                anim_rs.append(r_anim)
+                inan_rs.append(r_inan)
+                contrast_rs.append(r_contrast)
+
+            except Exception as e:
+                print(f"Skipping {subject} at size {size}: {e}")
+                continue
+
+        #R(averaged(m1,m2))
+        if cases:
+            data = Dataset.from_caselist(["subject", "model", "animacy", "ncrf"], cases)
+            data_avg = data.aggregate("model", drop_bad=True)
+            m1 = data_avg["ncrf"][data_avg["model"]=="M1"][0].get_data().ravel()
+            m2 = data_avg["ncrf"][data_avg["model"]== "M2"][0].get_data().ravel()
+            r_avg = np.corrcoef(m1, m2)[0, 1]
+            summary_avg.append({"Subset Size": int(size * trials_per_subset), "pearson_r": r_avg})
+
+        # mean R
+        if contrast_rs:
+            contrast_results.append({
+                "Subset Size": int(size * trials_per_subset),
+                "Mean Pearson r": np.nanmean(contrast_rs),
+                "N Subjects": len(contrast_rs)
+            })
+        if anim_rs:
+            anim_results.append({
+                "Subset Size": int(size * trials_per_subset),
+                "Mean Pearson r": np.nanmean(anim_rs),
+                "N Subjects": len(anim_rs)
+            })
+        if inan_rs:
+            inan_results.append({
+                "Subset Size": int(size * trials_per_subset),
+                "Mean Pearson r": np.nanmean(inan_rs),
+                "N Subjects": len(inan_rs)
+            })
+
+        #t-map
+        if cases:
+            data['ncrf_norm'] = [nd.norm('space') for nd in data['ncrf']]
+
+            res_m1 =testnd.TTestOneSample(data.sub('model== "M1"')['ncrf_norm'], samples=0)
+            res_m2= testnd.TTestOneSample(data.sub('model =="M2"')['ncrf_norm'], samples=0)
+            tmap_m1,tmap_m2 = res_m1.t, res_m2.t
+            r_tmaps= np.corrcoef(tmap_m1.x.ravel(), tmap_m2.x.ravel())[0, 1]
+
+            res_m1_t2=testnd.Vector(data.sub('model=="M1"')['ncrf'], samples=0)
+            res_m2_t2= testnd.Vector(data.sub('model=="M2"')['ncrf'], samples=0)
+            t2map_m1, t2map_m2 =res_m1_t2.t2, res_m2_t2.t2
+            r_t2 = np.corrcoef(t2map_m1.x.ravel(), t2map_m2.x.ravel())[0, 1]
+
+            summary_tmaps.append({
+                "Subset Size": int(size * trials_per_subset),
+                "Tmap_Corr": r_tmaps,
+                "T2map_Corr": r_t2
+            })
+
+    
+    results = {
+        "avg":pd.DataFrame(summary_avg),
+        "contrast": pd.DataFrame(contrast_results),
+        "anim":pd.DataFrame(anim_results),
+        "inan":pd.DataFrame(inan_results),
+        "tmap":pd.DataFrame(summary_tmaps),
+    }
+    return results
+
+# ----------------------------------------------------------
+
+results_ncrf = compute_results("NCRF-DC", dirs["NCRF-DC"])
+results_mne = compute_results("MNE", dirs["MNE"])
+
