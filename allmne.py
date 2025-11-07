@@ -26,6 +26,8 @@ from eelbrain import *
 from eelbrain import NDVar
 from eelbrain._data_obj import VolumeSourceSpace
 import os
+import matplotlib.pyplot as plt
+import seaborn as sns
 from Beyond import morph_hemi          
 
 # %% [markdown]
@@ -313,7 +315,7 @@ for t in times:
 # %%
 root_epochs = Path("/Users/maryamvalian/Data/ds005810/derivatives/preprocessed/epochs")
 #-------------------------------------------
-#sizes = [0.25, 0.5, 1, 2,  4, 6 ,8]      #for i<10
+sizes = [0.25, 0.5, 1, 2,  4, 6 ,8]      #for i<10
 #------------------------------------------
 per_run=200
 
