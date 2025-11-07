@@ -998,6 +998,7 @@ for size in sizes:
                         session = "ImageNet03"
                     else:
                         session = "ImageNet04"
+                        
                     fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
                     fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
                     
