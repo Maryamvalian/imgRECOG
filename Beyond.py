@@ -257,13 +257,12 @@ def morph_hemi(stc_vec, subject, subject_to="fsaverage2", *, subjects_dir, src_t
     missL = np.setdiff1d(vL_to, v_wh)
     missR = np.setdiff1d(vR_to, v_wh)
     if missL.size or missR.size:
-        raise RuntimeError("Some hemi vertices not present in merged fsaverage2 grid; "
-                           "check that {src_tag} and pruning match on both sides.")
+        raise RuntimeError("Some hemi vertices not present in merged fsaverage grid ")
 
     # map vertex IDs → row indices in merged grid
-    idx_wh = {v: i for i, v in enumerate(v_wh)}
-    idxL = np.fromiter((idx_wh[v] for v in vL_to), dtype=int, count=len(vL_to))
-    idxR = np.fromiter((idx_wh[v] for v in vR_to), dtype=int, count=len(vR_to))
+    idx_wh ={v: i for i, v in enumerate(v_wh)}
+    idxL= np.fromiter((idx_wh[v] for v in vL_to), dtype=int, count=len(vL_to))
+    idxR= np.fromiter((idx_wh[v] for v in vR_to), dtype=int, count=len(vR_to))
 
     # fill whole-brain array
     T = stc_L_fs.data.shape[2]
