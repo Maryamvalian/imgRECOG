@@ -1399,7 +1399,7 @@ plt.show()
 
 # %%
 session="ImageNet01"      #10 to 30 
-model_dir = "models/samesize/dc"       #<----------- Dummy
+model_dir = "models/samesize/dc"       #<----------- Dummy: /dc , Effect : /effect
 sizes = [0.25, 0.5, 1, 2] 
 
 for size in sizes:
