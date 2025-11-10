@@ -1901,9 +1901,7 @@ for subj in subjects:
         model_path = f"{model_dir}/{m}-{size}-{subject}.pickle"
         try:
             model = load.unpickle(model_path)
-            # each model has an attribute `.mu`
             mu = model.mu if hasattr(model, "mu") else np.nan
-           
             mu_data.append({
                 "Subject": subject,
                 "Model": f"M{m}",
@@ -1913,8 +1911,95 @@ for subj in subjects:
 
 df_mu = pd.DataFrame(mu_data)
 print("\nSummary of mu values (size=400 trials):")
-print(df_mu)
+print(df_mu.head())
 print("\nOverall mu statistics:")
 print(df_mu["mu"].describe())
+
+# %% [markdown]
+# ## fir ncrf 10 to 31 - for mus
+
+# %%
+# ---------------------------
+session = "ImageNet01"
+model_dir = "models/mu"   
+sizes = [2]                          
+mu_values = [1e-6, 3e-5, 1e-3]       
+subjects = range(10, 31)             
+
+ordered_runs = {
+    1: ["02", "05"],
+    2: ["03", "01"]
+}
+
+# ---------------------------
+for mu in mu_values:
+    print(f"\n================mu = {mu} ===================")
+   
+
+    for size in sizes:
+        order_cut = size if size >= 1 else 1
+
+        for i in subjects:
+            subject = f"sub-{i:02d}"
+            for model in [1, 2]:
+                run_list = ordered_runs[model][:int(order_cut)]
+
+                modelfile = f"{model_dir}/{model}-{mu}-{subject}.pickle"
+                morphfile = f"{model_dir}/M{model}-{mu}-{subject}.pickle"
+
+                if os.path.exists(modelfile) or os.path.exists(morphfile):
+                    print(f"{subject} M{model} model already exists ")
+                    continue
+
+                try:
+                    print(f"  Computing forward model for {subject}...")
+                    clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
+                    clean = mne.io.read_raw_fif(clean_fif, preload=False, verbose=False)
+                    info = clean.info
+                    meg_ndvar = load.fiff.raw_ndvar(clean)
+                    sensor = meg_ndvar.sensor
+
+                    fwd = compute_fwd_ndvar(subject, session, subjects_dir, info, sensor)
+
+                    meg_all, stim_all = [], []
+
+                    for run in run_list:
+                        meg = load_meg_ndvar(subject, session, run)
+                        event_table = make_event_table(subject, session, run)
+                        event_table = event_table.sort_values(by='time').reset_index(drop=True)
+
+                        # Trim only if needed (size < 1)
+                        if size < 1:
+                            cut = int(200 * size)
+                            event_table = event_table.iloc[:cut]
+                            t_cut = float(event_table.iloc[-1]['time'])
+                            meg = meg.sub(time=(0, t_cut))
+
+                        meg_all.append(meg)
+
+                        
+                        stim1, stim2 = make_predictors_for_run(meg, event_table, mod="dummy")  # <======
+                        stim_all.append([stim1, stim2])
+
+                    
+                    
+                    args = (meg_all, stim_all, fwd, noise_cov, 0, 0.7)
+                    kwargs = {
+                        'normalize': 'l1',
+                        'in_place': False,
+                        'mu': mu,            
+                        'verbose': True,
+                        'n_iter': 10,
+                        'n_iterc': 10,
+                        'n_iterf': 100
+                    }
+
+                    model_fit = fit_ncrf(*args, **kwargs)
+                    save.pickle(model_fit, modelfile)
+                    print(f"  Model saved to {modelfile}\n")
+
+                except Exception as e:
+                    print(f"Error processing {subject}, M{model}: {e}\n")
+
 
 # %%
