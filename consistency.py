@@ -26,7 +26,7 @@ import os
 from pathlib import Path
 from Beyond import *
 import eelbrain as eb
-
+import seaborn as sns
 
 # %%
 mod="dummy"  #common, effect, dummy, ortho (effect with unbalanced trial counts)
@@ -1399,7 +1399,7 @@ plt.show()
 
 # %%
 session="ImageNet01"      #10 to 30 
-model_dir = "models/samesize/effect"       #<----------- Dummy: /dc , Effect : /effect
+model_dir = "models/samesize/dc"       #<----------- Dummy: /dc , Effect : /effect
 sizes = [0.25, 0.5, 1, 2] 
 
 for size in sizes:
@@ -1470,7 +1470,7 @@ for size in sizes:
                     meg_all.append(meg)     #meg or Trimed meg for less than one run
     
         
-                    stim1,stim2= make_predictors_for_run(meg, event_table,mod="effect")  # <=============== Effect, dummy
+                    stim1,stim2= make_predictors_for_run(meg, event_table,mod="dummy")  # <=============== Effect, dummy
                     predictors=[stim1,stim2]
                     stim_all.append(predictors)  
                     
@@ -1489,236 +1489,120 @@ for size in sizes:
 # # analysis
 
 # %%
-def load_model_subset(m, subject,size):
-    
-    file_path = f"{model_dir}/{m}-{size}-{subject}.pickle"
-    inan, anim = load.unpickle(file_path)
-    return inan, anim
-
-
-model_dir = "models/samesize/2sesmne"
-sizes = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
-trials_per_subset = 200
-
-summary = []
-print("Awcosine:")
-for size in sizes:
-    cases = []
-
-    for i in range(1, 10):
-        if i in [4, 6, 7]:
-            continue
-
-        subject = f"sub-{i:02d}"
-        try:
-            inan1, anim1 = load_model_subset(1, subject, size)
-            inan2, anim2 = load_model_subset(2, subject,  size)
-            d1 = anim1 - inan1
-            d2 = anim2 - inan2
-            cases.append([subject, "M1", "contrast", d1])
-            cases.append([subject, "M2", "contrast", d2])
-
-        except Exception as e:
-            print(f"Skipping {subject} at size {size}: {e}")
-            continue
-
-    
-    data = Dataset.from_caselist(['subject', 'model', 'animacy', 'mne'], cases)
-    data['mne_norm'] = [nd.norm('space') for nd in data['mne']]
-    res_m1 = testnd.TTestOneSample(data.sub('model == "M1"')['mne_norm'])
-    res_m2 = testnd.TTestOneSample(data.sub('model == "M2"')['mne_norm'])
-    tmap_m1 = res_m1.t
-    tmap_m2 = res_m2.t
-    
-    #plot.GlassBrain(tmap_m1,title="T-map M1")
-    #plot.GlassBrain(tmap_m2,title="T-map M2")
-
-    m1x = tmap_m1.x.ravel()
-    m2x = tmap_m2.x.ravel()
-    r_tmaps = np.corrcoef(m1x, m2x)[0, 1]
-
-
-    #----------------T2-map
-    res_m1_t2 = testnd.Vector(data.sub('model == "M1"')['mne'],samples=1000)
-    res_m2_t2 = testnd.Vector(data.sub('model == "M2"')['mne'],samples=1000)
-    t2map_m1 = res_m1_t2.t2
-    t2map_m2 = res_m2_t2.t2
-
-    m1_t2 = t2map_m1.x.ravel()
-    m2_t2 = t2map_m2.x.ravel()
-    r_t2 = np.corrcoef(m1_t2, m2_t2)[0, 1]
-    
-    summary.append({
-        "Subset Size": int(size * trials_per_subset),
-        "Tmap_Corr": r_tmaps,
-        "T2map_Corr": r_t2
-    })
-
-#----------
-df_t_mne = pd.DataFrame(summary)
-print("\nSummary MNe:")
-print(df_t_mne.round(3))
-
-# %%
-model_dir = "models/samesize/dc"
-sizes = [0.25, 0.5, 1, 2, 3, 4, 6,8]
-trials_per_subset = 200
-
-summary = []
-for size in sizes:
-    
-    cases = []
-    for i in range(1,10):
-        if i in [4,6,7]:
-            continue
-
-        subject = f"sub-{i:02d}"
-        m1_file = f"{model_dir}/M1-{size}-{subject}.pickle"
-        m2_file = f"{model_dir}/M2-{size}-{subject}.pickle"
-
-        if not (os.path.exists(m1_file) and os.path.exists(m2_file)):
-            print(f"Skipping {subject}: missing file(s)")
-            continue
-
-        in1,an1 = load.unpickle(m1_file)
-        in2,an2 = load.unpickle(m2_file)
-        contrast1 = an1 - in1
-        contrast2 = an2 - in2
-        cases.append([subject, "M1", "contrast", contrast1])
-        cases.append([subject, "M2", "contrast", contrast2])
-
-    data = Dataset.from_caselist(['subject', 'model', 'animacy', 'ncrf'], cases)
-
-    data['ncrf_norm'] = [nd.norm('space') for nd in data['ncrf']]
-    res_m1 = testnd.TTestOneSample(data.sub('model == "M1"')['ncrf_norm'])
-    res_m2 = testnd.TTestOneSample(data.sub('model == "M2"')['ncrf_norm'])
-    tmap_m1 = res_m1.t
-    tmap_m2 = res_m2.t
-    
-    #plot.GlassBrain(tmap_m1,title="T-map M1")
-    #plot.GlassBrain(tmap_m2,title="T-map M2")
-
-    eff_m1x = tmap_m1.x.ravel()
-    eff_m2x = tmap_m2.x.ravel()
-    r_tmaps = np.corrcoef(eff_m1x, eff_m2x)[0, 1]
-
-
-    #----------------T2-map
-    res_m1_t2 = testnd.Vector(data.sub('model == "M1"')['ncrf'],samples=0)
-    res_m2_t2 = testnd.Vector(data.sub('model == "M2"')['ncrf'],samples=0)
-    t2map_m1 = res_m1_t2.t2
-    t2map_m2 = res_m2_t2.t2
-
-    m1_t2 = t2map_m1.x.ravel()
-    m2_t2 = t2map_m2.x.ravel()
-    r_t2 = np.corrcoef(m1_t2, m2_t2)[0, 1]
-    
-    summary.append({
-        "Subset Size": int(size * trials_per_subset),
-        "Tmap_Corr": r_tmaps,
-        "T2map_Corr": r_t2
-    })
-
-#----------
-df_t_ncrfdc = pd.DataFrame(summary)
-print("\nSummary NCRF-DC:")
-print(df_t_ncrfdc.round(3))
-
-# %%
-# ALL Anslysis for MNE, NCRF-DC
-# (subjects 10-31)
-sizes = [0.25, 0.5, 1, 2]
+sizes = [0.25, 0.5, 1, 2, 4, 6, 8] #for i<10
+#sizes = [0.25, 0.5, 1, 2]
 trials_per_subset = 200
 dirs = {
     "NCRF-DC": "models/samesize/dc",
-    "MNE": "models/samesize/2sesmne"
+    "MNE": "models/samesize/2sesmne",
+    "NCRF-EC": "models/samesize/effect",
 }
-
 #---------------------------------
 def load_model_subset(model_dir, m, subject, size):
+   
+   
+    if "2sesmne" in model_dir.lower() or "mne" in model_dir.lower():
+        file_path = f"{model_dir}/{m}-{size}-{subject}.pickle"
+    else:
+        file_path = f"{model_dir}/M{m}-{size}-{subject}.pickle"
     
-    file_path = f"{model_dir}/M{m}-{size}-{subject}.pickle" if "dc" in model_dir else f"{model_dir}/{m}-{size}-{subject}.pickle"
     inan, anim = load.unpickle(file_path)
     return inan, anim
-
+#-------------------------------------
 def compute_results(method_name, model_dir):
-    print(f"\nProcessing {method_name} results...")
+    print(f"Processing {method_name} results...")
     summary_avg = []
-    contrast_results, anim_results, inan_results, summary_tmaps = [], [], [], []
+    contrast_results, condition_results, summary_tmaps = [], [], []
 
     for size in sizes:
         cases = []
         contrast_rs, anim_rs, inan_rs = [], [], []
 
-        for i in range(10, 31):
+        for i in range(1, 10):
+            
+            if i in [4, 6, 7]: continue
             subject = f"sub-{i:02d}"
             try:
-                inan1, anim1= load_model_subset(model_dir, 1, subject, size)
-                inan2, anim2 =load_model_subset(model_dir, 2, subject, size)
-                d1 = anim1-inan1
-                d2 = anim2-inan2
-                cases.append([subject,"M1","contrast",d1])
-                cases.append([subject,"M2","contrast",d2])
+                inan1, anim1 = load_model_subset(model_dir, 1, subject, size)
+                inan2, anim2 = load_model_subset(model_dir, 2, subject, size)
+                if method_name=="NCRF-EC":
+                    d1, d2 = inan1, inan2  #contrast is the first one in morphed file
+                else:
+                    d1, d2 = anim1 - inan1, anim2 - inan2
 
-                a1=anim1.get_data().ravel()
-                a2=anim2.get_data().ravel()
-                i1=inan1.get_data().ravel()
-                i2=inan2.get_data().ravel()
+                cases.append([subject, "M1", "contrast", d1])
+                cases.append([subject, "M2", "contrast", d2])
+                i1 = inan1.get_data().ravel()
+                i2 = inan2.get_data().ravel()
+                a1 = anim1.get_data().ravel()
+                a2 = anim2.get_data().ravel()
+                d1_flat = d1.get_data().ravel()
+                d2_flat = d2.get_data().ravel()
+    
+                if method_name!="NCRF-EC":
 
-                r_anim= np.corrcoef(a1, a2)[0, 1]
-                r_inan =np.corrcoef(i1, i2)[0, 1]
-                r_contrast =np.corrcoef(a1-i1  , a2-i2)[0, 1]
+                    if np.std(a1) == 0 or np.std(a2) == 0: 
+                        r_anim = np.nan
+                    else:
+                        r_anim = np.corrcoef(a1, a2)[0, 1]
 
-                anim_rs.append(r_anim)
-                inan_rs.append(r_inan)
+                    if np.std(i1) == 0 or np.std(i2) == 0: 
+                        r_inan = np.nan
+                    else:
+                        r_inan = np.corrcoef(i1, i2)[0, 1]
+                
+                    anim_rs.append(r_anim)
+                    inan_rs.append(r_inan)
+                    
+                
+                if np.std(d1_flat) == 0 or np.std(d2_flat) == 0 or np.any(np.isnan(d1_flat)) or np.any(np.isnan(d2_flat)):
+                    
+                    r_contrast = np.nan
+                else:
+                    r_contrast = np.corrcoef(d1_flat, d2_flat)[0, 1]
+        
                 contrast_rs.append(r_contrast)
 
             except Exception as e:
                 print(f"Skipping {subject} at size {size}: {e}")
                 continue
 
-        #R(averaged(m1,m2))
+        #Averaged model
         if cases:
             data = Dataset.from_caselist(["subject", "model", "animacy", "ncrf"], cases)
             data_avg = data.aggregate("model", drop_bad=True)
-            m1 = data_avg["ncrf"][data_avg["model"]=="M1"][0].get_data().ravel()
-            m2 = data_avg["ncrf"][data_avg["model"]== "M2"][0].get_data().ravel()
+            m1 = data_avg["ncrf"][data_avg["model"] == "M1"][0].get_data().ravel()
+            m2 = data_avg["ncrf"][data_avg["model"] == "M2"][0].get_data().ravel()
             r_avg = np.corrcoef(m1, m2)[0, 1]
             summary_avg.append({"Subset Size": int(size * trials_per_subset), "pearson_r": r_avg})
 
-        # mean R
+        #Mean R
         if contrast_rs:
             contrast_results.append({
                 "Subset Size": int(size * trials_per_subset),
                 "Mean Pearson r": np.nanmean(contrast_rs),
                 "N Subjects": len(contrast_rs)
             })
-        if anim_rs:
-            anim_results.append({
-                "Subset Size": int(size * trials_per_subset),
-                "Mean Pearson r": np.nanmean(anim_rs),
-                "N Subjects": len(anim_rs)
-            })
-        if inan_rs:
-            inan_results.append({
-                "Subset Size": int(size * trials_per_subset),
-                "Mean Pearson r": np.nanmean(inan_rs),
-                "N Subjects": len(inan_rs)
-            })
-
-        #t-map
+        
+        if method_name!="NCRF-EC":
+            if anim_rs and inan_rs:
+                condition_results.append({
+                    "Subset Size": int(size * trials_per_subset),
+                    "Anim": np.nanmean(anim_rs),
+                    "Inan": np.nanmean(inan_rs),
+                    "N Subjects": len(anim_rs)
+                })
+            
+        # T-map
         if cases:
             data['ncrf_norm'] = [nd.norm('space') for nd in data['ncrf']]
+            res_m1 = testnd.TTestOneSample(data.sub('model =="M1"')['ncrf_norm'], samples=0)
+            res_m2 = testnd.TTestOneSample(data.sub('model == "M2"')['ncrf_norm'], samples=0)
+            r_tmaps = np.corrcoef(res_m1.t.x.ravel(), res_m2.t.x.ravel())[0, 1]
 
-            res_m1 =testnd.TTestOneSample(data.sub('model== "M1"')['ncrf_norm'], samples=0)
-            res_m2= testnd.TTestOneSample(data.sub('model =="M2"')['ncrf_norm'], samples=0)
-            tmap_m1,tmap_m2 = res_m1.t, res_m2.t
-            r_tmaps= np.corrcoef(tmap_m1.x.ravel(), tmap_m2.x.ravel())[0, 1]
-
-            res_m1_t2=testnd.Vector(data.sub('model=="M1"')['ncrf'], samples=0)
-            res_m2_t2= testnd.Vector(data.sub('model=="M2"')['ncrf'], samples=0)
-            t2map_m1, t2map_m2 =res_m1_t2.t2, res_m2_t2.t2
-            r_t2 = np.corrcoef(t2map_m1.x.ravel(), t2map_m2.x.ravel())[0, 1]
+            res_m1_t2 = testnd.Vector(data.sub('model =="M1"')['ncrf'], samples=0)
+            res_m2_t2 = testnd.Vector(data.sub('model == "M2"')['ncrf'], samples=0)
+            r_t2 = np.corrcoef(res_m1_t2.t2.x.ravel(), res_m2_t2.t2.x.ravel())[0, 1]
 
             summary_tmaps.append({
                 "Subset Size": int(size * trials_per_subset),
@@ -1728,18 +1612,87 @@ def compute_results(method_name, model_dir):
 
     
     results = {
-        "avg":pd.DataFrame(summary_avg),
+        "avg": pd.DataFrame(summary_avg),
         "contrast": pd.DataFrame(contrast_results),
-        "anim":pd.DataFrame(anim_results),
-        "inan":pd.DataFrame(inan_results),
-        "tmap":pd.DataFrame(summary_tmaps),
+        "condition": pd.DataFrame(condition_results) if method_name!="NCRF-EC" else None,
+        "tmap": pd.DataFrame(summary_tmaps),
     }
     return results
 
-# ----------------------------------------------------------
 
-results_ncrf = compute_results("NCRF-DC", dirs["NCRF-DC"])
+# ----------------------------------
+results_ncrf_dc = compute_results("NCRF-DC", dirs["NCRF-DC"])
 results_mne = compute_results("MNE", dirs["MNE"])
+results_ncrf_ec = compute_results("NCRF-EC", dirs["NCRF-EC"])
+print("All Results are ready.")
+print(f"MNE:\n{results_mne["condition"]}")
+
+# %%
+#PLT T-MAP and T2-map
+df_dc = results_ncrf_dc["tmap"].copy()
+df_dc["Method"] = "NCRF-DC"
+df_mne = results_mne["tmap"].copy()
+df_mne["Method"] = "MNE"
+df_ec = results_ncrf_ec["tmap"].copy()
+df_ec["Method"] = "NCRF-EC"
+df_all = pd.concat([df_dc, df_mne, df_ec], ignore_index=True)
+
+
+df_long = df_all.melt(
+    id_vars=["Subset Size", "Method"],
+    value_vars=["Tmap_Corr", "T2map_Corr"],
+    var_name="Map Type",
+    value_name="Correlation"
+)
+
+df_tmap = df_long[df_long["Map Type"] == "Tmap_Corr"]
+df_t2map = df_long[df_long["Map Type"] == "T2map_Corr"]
+
+palette = {
+    "NCRF-DC": "#E68632",  
+    "MNE": "#3777B0",      
+    "NCRF-EC": "#228B22"   
+}
+
+# t-map
+plt.figure(figsize=(7, 4))
+sns.lineplot(
+    data=df_tmap,
+    x="Subset Size",
+    y="Correlation",
+    hue="Method",
+    marker="o",
+    linewidth=2,
+    palette=palette
+)
+plt.ylim(0, 1)
+plt.ylabel("Correlation (r)", fontsize=11)
+plt.xlabel("Number of Trials", fontsize=11)
+plt.title("T-map Correlations ", fontsize=13)
+plt.grid(True, linestyle="--", alpha=0.5)
+plt.legend(title="", loc="upper left", frameon=False)
+plt.tight_layout()
+plt.show()
+
+# t2
+plt.figure(figsize=(7, 4))
+sns.lineplot(
+    data=df_t2map,
+    x="Subset Size",
+    y="Correlation",
+    hue="Method",
+    marker="o",
+    linewidth=2,
+    palette=palette
+)
+plt.ylim(0, 1)
+plt.ylabel("Correlation (r)", fontsize=11)
+plt.xlabel("Number of Trials", fontsize=11)
+plt.title("T²-map Correlations ", fontsize=13)
+plt.grid(True, linestyle="--", alpha=0.5)
+plt.legend(title="", loc="upper left", frameon=False)
+plt.tight_layout()
+plt.show()
 
 
 # %%
