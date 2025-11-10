@@ -1399,7 +1399,7 @@ plt.show()
 
 # %%
 session="ImageNet01"      #10 to 30 
-model_dir = "models/samesize/dc"       #<----------- Dummy: /dc , Effect : /effect
+model_dir = "models/samesize/effect"       #<----------- Dummy: /dc , Effect : /effect
 sizes = [0.25, 0.5, 1, 2] 
 
 for size in sizes:
@@ -1470,7 +1470,7 @@ for size in sizes:
                     meg_all.append(meg)     #meg or Trimed meg for less than one run
     
         
-                    stim1,stim2= make_predictors_for_run(meg, event_table,mod="dummy")  # <=============== Effect, dummy
+                    stim1,stim2= make_predictors_for_run(meg, event_table,mod="effect")  # <=============== Effect, dummy
                     predictors=[stim1,stim2]
                     stim_all.append(predictors)  
                     
@@ -1604,8 +1604,8 @@ for size in sizes:
 
 
     #----------------T2-map
-    res_m1_t2 = testnd.Vector(data.sub('model == "M1"')['ncrf'],samples=1000)
-    res_m2_t2 = testnd.Vector(data.sub('model == "M2"')['ncrf'],samples=1000)
+    res_m1_t2 = testnd.Vector(data.sub('model == "M1"')['ncrf'],samples=0)
+    res_m2_t2 = testnd.Vector(data.sub('model == "M2"')['ncrf'],samples=0)
     t2map_m1 = res_m1_t2.t2
     t2map_m2 = res_m2_t2.t2
 
@@ -1622,7 +1622,7 @@ for size in sizes:
 #----------
 df_t_ncrfdc = pd.DataFrame(summary)
 print("\nSummary NCRF-DC:")
-print(df_t_ncrfec.round(3))
+print(df_t_ncrfdc.round(3))
 
 # %%
 # ALL Anslysis for MNE, NCRF-DC
