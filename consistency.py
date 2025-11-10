@@ -1766,3 +1766,45 @@ plt.show()
 
 
 # %%
+df_mne_cond = results_mne["condition"].copy()
+df_dc_cond = results_ncrf_dc["condition"].copy()
+palette_cond = {"Animate": "#66BB66", "Inanimate": "#3399FF" }
+nsub_mne = int(df_mne_cond["N Subjects"].iloc[0]) if not df_mne_cond.empty else 0
+nsub_dc = int(df_dc_cond["N Subjects"].iloc[0]) if not df_dc_cond.empty else 0
+
+#mne
+plt.figure(figsize=(6, 4))
+x = np.arange(len(df_mne_cond["Subset Size"]))  # positions for bars
+width = 0.25                                    # bar width
+
+plt.bar(x - width/2, df_mne_cond["Anim"], width, label="Animate", color="#66BB66", edgecolor="black", alpha=0.9)
+plt.bar(x + width/2, df_mne_cond["Inan"], width, label="Inanimate", color="#3399FF", edgecolor="black", alpha=0.9)
+
+plt.xticks(x, df_mne_cond["Subset Size"].astype(int))
+plt.ylim(0, 1)
+plt.xlabel("Subset Size", fontsize=11)
+plt.ylabel("Mean Pearson r", fontsize=11)
+plt.title(f"within subject MNE ", fontsize=13) #({nsub_mne})
+plt.legend(title="", frameon=False)
+plt.grid(axis="y", linestyle="--", alpha=0.6)
+plt.tight_layout()
+plt.show()
+
+#NCRF---------------------------
+plt.figure(figsize=(6, 4))
+x = np.arange(len(df_dc_cond["Subset Size"]))
+plt.bar(x - width/2, df_dc_cond["Anim"], width, label="Animate", color="#66BB66", edgecolor="black", alpha=0.9)
+plt.bar(x + width/2, df_dc_cond["Inan"], width, label="Inanimate", color="#3399FF", edgecolor="black", alpha=0.9)
+
+plt.xticks(x, df_dc_cond["Subset Size"].astype(int))
+plt.ylim(0, 1)
+plt.xlabel("Number of Trials", fontsize=11)
+plt.ylabel("Mean Pearson r", fontsize=11)
+plt.title(f"within subject NCRF-DC ", fontsize=13) #({nsub_dc})
+plt.legend(title="", frameon=False)
+plt.grid(axis="y", linestyle="--", alpha=0.6)
+plt.tight_layout()
+plt.show()
+
+
+# %%
