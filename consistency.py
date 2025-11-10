@@ -1694,5 +1694,75 @@ plt.legend(title="", loc="upper left", frameon=False)
 plt.tight_layout()
 plt.show()
 
+#---------avg corr
+df_dc = results_ncrf_dc["avg"].copy()
+df_dc["Method"] = "NCRF-DC"
+df_mne = results_mne["avg"].copy()
+df_mne["Method"] = "MNE"
+df_ec = results_ncrf_ec["avg"].copy()
+df_ec["Method"] = "NCRF-EC"
+df_all = pd.concat([df_dc, df_mne, df_ec], ignore_index=True)
+
+palette_custom = {"NCRF-DC": "#E68632", "MNE": "#3777B0", "NCRF-EC": "#228B22"}
+plt.figure(figsize=(7, 4))
+sns.lineplot(
+    data=df_all,
+    x="Subset Size",
+    y="pearson_r",
+    hue="Method",
+    #style="Method",
+    marker='o',
+    markers=True,
+    dashes=True,
+    linewidth=2.2,
+    palette=palette_custom,
+)
+
+plt.ylim(0, 1)
+plt.ylabel("Pearson r", fontsize=11)
+plt.xlabel("Number of Trials", fontsize=11)
+plt.title("Averaged Model Correlations ", fontsize=13)
+plt.grid(True, linestyle="--", alpha=0.5)
+plt.legend(title="", loc="upper left", frameon=False)
+plt.tight_layout()
+plt.show()
+
+#Within subject (avg of corelation for each subject)
+
+df_dc_contrast = results_ncrf_dc["contrast"].copy()
+df_dc_contrast.rename(columns={"Mean Pearson r": "pearson_r"}, inplace=True)
+df_dc_contrast["Method"] = "NCRF-DC"
+df_mne_contrast = results_mne["contrast"].copy()
+df_mne_contrast.rename(columns={"Mean Pearson r": "pearson_r"}, inplace=True)
+df_mne_contrast["Method"] = "MNE"
+df_ec_contrast = results_ncrf_ec["contrast"].copy()
+df_ec_contrast.rename(columns={"Mean Pearson r": "pearson_r"}, inplace=True)
+df_ec_contrast["Method"] = "NCRF-EC"
+df_all = pd.concat([df_dc_contrast, df_mne_contrast, df_ec_contrast], ignore_index=True)
+
+palette_custom = {"NCRF-DC": "#E68632", "MNE": "#3777B0", "NCRF-EC": "#228B22"}
+plt.figure(figsize=(7, 4))
+sns.lineplot(
+    data=df_all,
+    x="Subset Size",
+    y="pearson_r",
+    hue="Method",
+    #style="Method",
+    marker='o',
+    markers=True,
+    dashes=True,
+    linewidth=2.2,
+    palette=palette_custom,
+)
+
+plt.ylim(0, 1)
+plt.ylabel("Mean Pearson r", fontsize=11)
+plt.xlabel("Number of Trials", fontsize=11)
+plt.title("Within-subject Contrast Correlations ", fontsize=13)
+plt.grid(True, linestyle="--", alpha=0.5)
+plt.legend(title="", loc="upper left", frameon=False)
+plt.tight_layout()
+plt.show()
+
 
 # %%
