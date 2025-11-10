@@ -27,6 +27,7 @@ from pathlib import Path
 from Beyond import *
 import eelbrain as eb
 import seaborn as sns
+import random
 
 # %%
 mod="dummy"  #common, effect, dummy, ortho (effect with unbalanced trial counts)
@@ -1806,5 +1807,114 @@ plt.grid(axis="y", linestyle="--", alpha=0.6)
 plt.tight_layout()
 plt.show()
 
+
+# %% [markdown]
+# # Experiement: Population size
+
+# %%
+#with standard error of mean (sEM) :how precisely your sample’s mean (average) estimates the true population mean.
+#How precisely do we know the group mean?
+
+model_dir = "models/samesize/dc"
+sizes = [0.25, 0.5 , 1, 2]   #trail size 50,100,200,400
+all_subjects = [i for i in range(1, 31) if i not in [4, 6, 7]]
+population_sizes = [5, 7, 9, 11,15, 21, 27]
+n_resamples = 20
+
+def load_contrast(subject, size):
+    """Compute correlation for given subject and subset size."""
+    subject = f"sub-{subject:02d}"
+    inan1, anim1 = load.unpickle(f"{model_dir}/M1-{size}-{subject}.pickle")
+    inan2, anim2 = load.unpickle(f"{model_dir}/M2-{size}-{subject}.pickle")
+    d1 = anim1 - inan1
+    d2 = anim2 - inan2
+    d1_flat = d1.get_data().ravel()
+    d2_flat = d2.get_data().ravel()
+    if np.std(d1_flat) == 0 or np.std(d2_flat) == 0:
+        return np.nan
+    return np.corrcoef(d1_flat, d2_flat)[0, 1]
+#---------------
+results_all = []
+
+for size in sizes:
+    results = []
+    for pop_size in population_sizes:
+        rs = []
+        for i in range(n_resamples):
+            selected = random.sample(all_subjects, pop_size)
+            group_r = []
+            for subj in selected:
+                try:
+                    r = load_contrast(subj, size)
+                    if not np.isnan(r):
+                        group_r.append(r)
+                except Exception as e:
+                    print(f"Skipping sub-{subj:02d} at size {size}: {e}")
+            if group_r:
+                rs.append(np.mean(group_r))
+        results.append({
+            "Subset Size": int(size * 200),
+            "Population Size": pop_size,
+            "Mean r": np.nanmean(rs),
+            "SEM": np.nanstd(rs) / np.sqrt(len(rs))
+        })
+    df_size = pd.DataFrame(results)
+    results_all.append(df_size)
+
+df_all = pd.concat(results_all, ignore_index=True)
+
+# plot
+plt.figure(figsize=(7, 4))
+palette = {50: "#77B255", 100: "#FFD700", 200: "#E68632", 400: "#3777B0"}  
+
+for subset in df_all["Subset Size"].unique():
+    df_sub = df_all[df_all["Subset Size"] == subset]
+    plt.errorbar(df_sub["Population Size"], df_sub["Mean r"],
+                 yerr=df_sub["SEM"],
+                 fmt='o-', lw=2.2, capsize=4,
+                 label=f"{subset} trials",
+                 color=palette[subset])
+
+plt.xlabel("Number of Subjects (Population Size)", fontsize=11)
+plt.ylabel("Mean Pearson r (M1 vs M2)", fontsize=11)
+plt.title("Population Size Effect on NCRF-DC (Contrast) Reliability", fontsize=13)
+plt.ylim(0, 0.6)
+plt.grid(True, linestyle="--", alpha=0.6)
+plt.legend(title="Subset Size", frameon=False)
+plt.xticks(df_all["Population Size"].unique().astype(int))
+plt.xlim(min(population_sizes) - 1, max(population_sizes) + 1)
+plt.tight_layout()
+plt.show()
+
+
+# %%
+#read mus from current model (auto mu)
+# ----------
+model_dir = "models/samesize/effect"
+size = 2   
+subjects = [i for i in range(10, 31) if i not in [4, 6, 7]]
+
+mu_data = []
+for subj in subjects:
+    subject = f"sub-{subj:02d}"
+    for m in [1, 2]:
+        model_path = f"{model_dir}/{m}-{size}-{subject}.pickle"
+        try:
+            model = load.unpickle(model_path)
+            # each model has an attribute `.mu`
+            mu = model.mu if hasattr(model, "mu") else np.nan
+           
+            mu_data.append({
+                "Subject": subject,
+                "Model": f"M{m}",
+                "mu": mu})  
+        except Exception as e:
+            print(f"Skipping {subject}, M{m}: {e}")
+
+df_mu = pd.DataFrame(mu_data)
+print("\nSummary of mu values (size=400 trials):")
+print(df_mu)
+print("\nOverall mu statistics:")
+print(df_mu["mu"].describe())
 
 # %%
