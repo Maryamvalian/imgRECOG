@@ -348,3 +348,58 @@ def fisher_r_to_z(R_matrix):
     Z_matrix = 0.5 * np.log((1 + R_matrix) / (1 - R_matrix))
     return Z_matrix
 
+
+#-------------------------------
+def ndvar_AWcosine(nd1, nd2, thr=1e-12, mode="or"):
+    
+    A = np.asarray(nd1.get_data(), dtype=float)  # (V, 3, T)
+    B = np.asarray(nd2.get_data(), dtype=float)
+    if A.shape != B.shape:
+        raise ValueError(f"Shape mismatch: {A.shape} vs {B.shape}")
+
+    V, _, T = A.shape
+    cos_aw_t = np.full(T, np.nan)
+    n_used   = np.zeros(T, dtype=int)
+
+    
+    tmin  = float(nd1.time.tmin)
+    tstep = float(nd1.time.tstep)
+    times = tmin + np.arange(T) * tstep
+
+    for t in range(T):
+        Ai = A[:, :, t]                          
+        Bi = B[:, :, t]
+        aN = np.linalg.norm(Ai, axis=1)         
+        bN = np.linalg.norm(Bi, axis=1)
+
+        if mode.lower() == "and":
+            consider = (aN > thr) & (bN > thr)
+        else: 
+            consider = (aN > thr) | (bN > thr)
+
+        
+        valid = consider & (aN > 0) & (bN > 0)
+        if not np.any(valid):
+            continue
+
+        Ai_v = Ai[valid]
+        Bi_v = Bi[valid]
+        aN_v = aN[valid]
+        bN_v = bN[valid]
+
+        # voxel cosine 
+        dots  = np.einsum('ij,ij->i', Ai_v, Bi_v)   # <A_i, B_i>
+        cos_i = dots / (aN_v * bN_v)                # (n_vox_t,)
+
+        #voxel amplitude weights 
+        w = 0.5 * (aN_v + bN_v)
+        wsum = w.sum()
+        if wsum == 0:
+            continue
+
+        cos_aw_t[t] = float(np.sum(w * cos_i) / wsum)
+        n_used[t]   = int(valid.sum())
+
+    return cos_aw_t, n_used, times
+#--------------------------------
+
