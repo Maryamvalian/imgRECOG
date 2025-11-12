@@ -848,21 +848,14 @@ ds.tail()
 # %%
 #TRIM MEG TO HALF SIZE (SHOULD TRIM MEG ONLY TRIMING STIM doesn't WORKS)
 model_dir = "models/samesize/dc"
-sizes = [0.25, 0.5, 1, 2,  3, 4, 6 ,8] 
-
+mod="dummy"    #effect, dummy
+#sizes = [0.25, 0.5, 1, 2,  3, 4, 6 ,8] 
+sizes = [ 2,  3, 4, 6 ,8] 
 for size in sizes:
     print(f"=================== Size={size}==================")
     for i in range (1,10):                 #first 9 subjects
-        if i==7 or i==6 or i==4:
-            continue
-           
-        
+        if i in [4,6,7]: continue
         subject = f"sub-{i:02d}"
-        
-        #FWD for Session
-        
-              
-        
         ordered_runs = ["02", "01", "03", "06", "04", "05", "07", "08"]
         run_select= size if size>=1 else 1
         subset = ordered_runs[:run_select]
@@ -876,19 +869,16 @@ for size in sizes:
             info= clean.info           
             meg_ndvar = load.fiff.raw_ndvar(clean)
             sensor=meg_ndvar.sensor
-
-            
             run_list = [r for r in subset]
-            #subset=subsets[model-1]
-            #print(f"{subset}")
+            
             modelfile = f"{model_dir}/{model}-{size}-{subject}.pickle"
             morphfile = f"{model_dir}/M{model}-{size}-{subject}.pickle"
             if os.path.exists(modelfile):
                 print(f"{model}-{size}-{subject} model file exists.")
                 continue
-            if os.path.exists(morphfile):
-                print(f"{model}-{size}-{subject} Morph file exists.")
-                continue
+            #if os.path.exists(morphfile):
+            #    print(f"{model}-{size}-{subject} Morph file exists.")
+            #    continue
             try:        
                 print(f"computing fwd for {subject}-{session}... ")
                 fwd = compute_fwd_ndvar(subject, session,subjects_dir,info,sensor)
@@ -899,14 +889,10 @@ for size in sizes:
                     
                     print(f"Loading session-{session}, run-{run} MEG ...")
                     meg= load_meg_ndvar(subject, session, run)
-                    #meg_all.append(meg)
                     event_table= make_event_table(subject, session, run)
-                    #-----------half
-    
+                    #split one run
                     event_table = event_table.sort_values(by='time').reset_index(drop=True)
-    
                     cut = int(200 * size)
-    
                     if size==0.5 or size==0.25:
                         
                         if len(event_table) > cut:
@@ -920,8 +906,7 @@ for size in sizes:
     
                     meg_all.append(meg)     #meg or Trimed meg for less than one run
     
-        
-                    stim1,stim2= make_predictors_for_run(meg, event_table,mod="dummy")  # <=============== Effect, dummy
+                    stim1,stim2= make_predictors_for_run(meg, event_table,mod=mod)  
                     predictors=[stim1,stim2]
                     stim_all.append(predictors)  
                     
