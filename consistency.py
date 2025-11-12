@@ -1875,10 +1875,10 @@ for subset in df_all["Subset Size"].unique():
                  label=f"{subset} trials",
                  color=palette[subset])
 
-plt.xlabel("Number of Subjects (Population Size)", fontsize=11)
-plt.ylabel("Mean Pearson r (M1 vs M2)", fontsize=11)
-plt.title("Population Size Effect on NCRF-DC (Contrast) Reliability", fontsize=13)
-plt.ylim(0, 0.6)
+plt.xlabel("Number of Subjects", fontsize=11)
+plt.ylabel("Mean Pearson r ", fontsize=11)
+plt.title("Population Size Effect (NCRF-DC)on Reliability", fontsize=13)
+plt.ylim(0, 0.8)
 plt.grid(True, linestyle="--", alpha=0.6)
 plt.legend(title="Subset Size", frameon=False)
 plt.xticks(df_all["Population Size"].unique().astype(int))
@@ -1890,7 +1890,7 @@ plt.show()
 # %%
 #read mus from current model (auto mu)
 # ----------
-model_dir = "models/samesize/effect"
+model_dir = "models/samesize/dc"
 size = 2   
 subjects = [i for i in range(10, 31) if i not in [4, 6, 7]]
 
@@ -1920,10 +1920,10 @@ print(df_mu["mu"].describe())
 
 # %%
 # ---------------------------
-session = "ImageNet01"
+
 model_dir = "models/mu"   
 sizes = [2]                          
-mu_values = [1e-6, 3e-5, 1e-3]       
+mu_values = [1e-6, 1e-5, 4e-5, 1e-4, 4e-4, 1e-3]       
 subjects = range(10, 31)             
 
 ordered_runs = {
@@ -1941,6 +1941,7 @@ for mu in mu_values:
 
         for i in subjects:
             subject = f"sub-{i:02d}"
+            session = "ImageNet01" if i>9 else "ImageNet03"
             for model in [1, 2]:
                 run_list = ordered_runs[model][:int(order_cut)]
 
@@ -2007,7 +2008,7 @@ for mu in mu_values:
 session = "ImageNet01"
 model_dir = "models/mu/ec"   
 sizes = [2]                          
-mu_values = [1e-6, 3e-5, 1e-3]       
+mu_values = [1e-6, 1e-5, 4e-5, 1e-3]      
 subjects = range(10, 31)             
 
 ordered_runs = {
