@@ -1923,7 +1923,7 @@ print(df_mu["mu"].describe())
 
 model_dir = "models/mu"   
 sizes = [2]                          
-mu_values = [1e-6, 1e-5, 4e-5, 1e-4, 4e-4, 1e-3]       
+mu_values = [1e-7, 1e-6, 1e-5, 4e-5, 1e-4, 4e-4, 1e-3]       
 subjects = range(10, 31)             
 
 ordered_runs = {
@@ -2008,7 +2008,7 @@ for mu in mu_values:
 session = "ImageNet01"
 model_dir = "models/mu/ec"   
 sizes = [2]                          
-mu_values = [1e-6, 1e-5, 4e-5, 1e-3]      
+mu_values = [1e-7, 1e-6, 1e-5, 4e-5, 1e-4, 4e-4, 1e-3]     
 subjects = range(10, 31)             
 
 ordered_runs = {
