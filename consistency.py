@@ -979,148 +979,17 @@ for j, size in enumerate(subset_sizes[:-1]):  #skip 1600
 
 
 # %% [markdown]
-# # Correlation (diff(anim,inan)_m1 , diff(anim,inan)_m2)
-
-# %%
-def corr_diff(n_subject,size):
-    
-    R_data = np.full(n_subject, np.nan)
-
-    for i in range(1, n_subject + 1):
-        subject = f"sub-{i:02d}"
-        session = "ImageNet04" if i == 7 else "ImageNet03"
-
-        try:
-            inan1, anim1 = load_model_subset(1, subject, session,size)
-            inan2, anim2 = load_model_subset(2, subject, session,size)
-            d1 = anim1 - inan1
-            d2 = anim2 - inan2
-
-            #Pearson R
-            diff1= np.asarray(d1.get_data()).reshape(-1)
-            diff2= np.asarray(d2.get_data()).reshape(-1)
-            r = np.corrcoef(diff1, diff2)[0, 1]
-            R_data[i - 1] = r
-            
-        except Exception as e:
-            print(f"failed: {e}")
-
-    Z_data = fisher_r_to_z(R_data)
-    return R_data, Z_data
-
-#------------------------------------------
-model_dir = "models/samesize/dc"
-n_subject = 9
-sizes = [0.25, 0.5, 1, 2, 3, 4, 6]   
-trials_per_subset = 200
-#------------------------
-
-results = []
-for size in sizes:
-    R_diff, _ = corr_diff(n_subject, size)
-    
-
-    r_mean = np.nanmean ( R_diff)
-    
-
-    results.append({
-        "Subset Size": int(size * trials_per_subset),
-        "mean_r": r_mean,
-        
-    })
-
-df = pd.DataFrame(results)
-print("\nSummary:")
-print(df)
-
-#-------plot
-plt.figure(figsize=(6, 4))
-sns.barplot(
-    data=df,
-    x="Subset Size", y="mean_r",
-    color="maroon", edgecolor="black", width=0.5
-)
-plt.ylim(0, 1.0)
-plt.ylabel("Mean Pearson r")
-plt.title("Consistency of the pired difference (Animate-Inanimate)")
-plt.grid(axis="y", linestyle="--", alpha=0.5)
-plt.tight_layout()
-plt.show()
-
-
-# %% [markdown]
-# # EFFECT NCRF PLOT CONSISTENCY
-
-# %%
-#morph models for sizes are ready!
-model_dir = "models/samesize/effect"
-sizes = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
-trials_per_subset = 200
-
-results = []  
-
-for size in sizes:
-    
-    r_values = []
-
-    for i in range(1, 10):
-        if i in [6, 7]:
-            continue
-
-        subject = f"sub-{i:02d}"
-        m1 = f"{model_dir}/M1-{size}-{subject}.pickle"
-        m2 = f"{model_dir}/M2-{size}-{subject}.pickle"
-
-        if not (os.path.exists(m1) and os.path.exists(m2)):
-            continue
-
-        contrast1, _ = load.unpickle(m1)
-        contrast2, _ = load.unpickle(m2)
-
-        a = contrast1.get_data().ravel()
-        b = contrast2.get_data().ravel()
-        r = np.corrcoef(a, b)[0, 1]
-        r_values.append(r)
-
-    r_mean = np.nanmean(r_values)
-    results.append({
-        "Subset Size": int(size * trials_per_subset),
-        "mean_r": r_mean
-    })
-
-
-df = pd.DataFrame(results)
-print("\nSummary:")
-print(df)
-
-
-plt.figure(figsize=(6, 4))
-sns.barplot(
-    data=df,
-    x="Subset Size",
-    y="mean_r",
-    color="maroon",
-    edgecolor="black",
-    width=0.5
-)
-plt.ylim(0, 1)
-plt.ylabel("Mean Pearson r", fontsize=11)
-plt.xlabel("Number of Trials", fontsize=11)
-plt.title("Within Subject :Contrast Consistency- Effect NCRF", fontsize=12)
-plt.grid(axis="y", linestyle="--", alpha=0.5)
-plt.tight_layout()
-plt.show()
-
-# %% [markdown]
 # # SUBJECT 10 to 30
 # ## NCRF-DC
 #
 
 # %%
-session="ImageNet01"      #10 to 30 
+mod = "dummy"     
 model_dir = "models/samesize/dc"       #<----------- Dummy: /dc , Effect : /effect
-sizes = [0.25, 0.5, 1, 2] 
 
+
+sizes = [0.25, 0.5, 1, 2] 
+session="ImageNet01"  #10 to 30 
 for size in sizes:
     print(f"=================== Size={size}==================")
     ordered_runs = {
@@ -1138,10 +1007,7 @@ for size in sizes:
         for model in range (1,3):           #M1, M2
 
             run_list = ordered_runs[model][:int(order_cut)]   
-            #print(f"  M{model}:{run_list}")
-            
-    
-              
+            #print(f"  M{model}:{run_list}") 
             clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
             clean = mne.io.read_raw_fif(clean_fif, preload=False,verbose=False)
             info= clean.info           
@@ -1189,7 +1055,7 @@ for size in sizes:
                     meg_all.append(meg)     #meg or Trimed meg for less than one run
     
         
-                    stim1,stim2= make_predictors_for_run(meg, event_table,mod="dummy")  # <=============== Effect, dummy
+                    stim1,stim2= make_predictors_for_run(meg, event_table,mod=mod) 
                     predictors=[stim1,stim2]
                     stim_all.append(predictors)  
                     
@@ -1634,16 +1500,17 @@ print("\nOverall mu statistics:")
 print(df_mu["mu"].describe())
 
 # %% [markdown]
+# # Mu
 # ## fir ncrf 10 to 31 - for mus
 
 # %%
-# ---------------------------
 
-model_dir = "models/mu"   
-sizes = [2]                          
+mod = "effect"
+sizes = [2]  
+subjects = range(10, 31)   
 mu_values = [1e-7, 1e-6, 1e-5, 4e-5, 1e-4, 4e-4, 1e-3]       
-subjects = range(10, 31)             
-
+# ---------------------------
+model_dir = "models/mu" if mod == "dummy" else  "models/mu/ec"
 ordered_runs = {
     1: ["02", "05"],
     2: ["03", "01"]
@@ -1697,91 +1564,7 @@ for mu in mu_values:
                         meg_all.append(meg)
 
                         
-                        stim1, stim2 = make_predictors_for_run(meg, event_table, mod="dummy")  # <======
-                        stim_all.append([stim1, stim2])
-
-                    
-                    
-                    args = (meg_all, stim_all, fwd, noise_cov, 0, 0.7)
-                    kwargs = {
-                        'normalize': 'l1',
-                        'in_place': False,
-                        'mu': mu,            
-                        'verbose': True,
-                        'n_iter': 10,
-                        'n_iterc': 10,
-                        'n_iterf': 100
-                    }
-
-                    model_fit = fit_ncrf(*args, **kwargs)
-                    save.pickle(model_fit, modelfile)
-                    print(f"  Model saved to {modelfile}\n")
-
-                except Exception as e:
-                    print(f"Error processing {subject}, M{model}: {e}\n")
-
-
-# %%
-# ---------------------------
-session = "ImageNet01"
-model_dir = "models/mu/ec"   
-sizes = [2]                          
-mu_values = [1e-7, 1e-6, 1e-5, 4e-5, 1e-4, 4e-4, 1e-3]     
-subjects = range(10, 31)             
-
-ordered_runs = {
-    1: ["02", "05"],
-    2: ["03", "01"]
-}
-
-# ---------------------------
-for mu in mu_values:
-    print(f"\n================mu = {mu} ===================")
-   
-
-    for size in sizes:
-        order_cut = size if size >= 1 else 1
-
-        for i in subjects:
-            subject = f"sub-{i:02d}"
-            for model in [1, 2]:
-                run_list = ordered_runs[model][:int(order_cut)]
-
-                modelfile = f"{model_dir}/{model}-{mu}-{subject}.pickle"
-                morphfile = f"{model_dir}/M{model}-{mu}-{subject}.pickle"
-
-                if os.path.exists(modelfile) or os.path.exists(morphfile):
-                    print(f"{subject} M{model} model already exists ")
-                    continue
-
-                try:
-                    print(f"  Computing forward model for {subject}...")
-                    clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
-                    clean = mne.io.read_raw_fif(clean_fif, preload=False, verbose=False)
-                    info = clean.info
-                    meg_ndvar = load.fiff.raw_ndvar(clean)
-                    sensor = meg_ndvar.sensor
-
-                    fwd = compute_fwd_ndvar(subject, session, subjects_dir, info, sensor)
-
-                    meg_all, stim_all = [], []
-
-                    for run in run_list:
-                        meg = load_meg_ndvar(subject, session, run)
-                        event_table = make_event_table(subject, session, run)
-                        event_table = event_table.sort_values(by='time').reset_index(drop=True)
-
-                        # Trim only if needed (size < 1)
-                        if size < 1:
-                            cut = int(200 * size)
-                            event_table = event_table.iloc[:cut]
-                            t_cut = float(event_table.iloc[-1]['time'])
-                            meg = meg.sub(time=(0, t_cut))
-
-                        meg_all.append(meg)
-
-                        
-                        stim1, stim2 = make_predictors_for_run(meg, event_table, mod="effect")  # <======
+                        stim1, stim2 = make_predictors_for_run(meg, event_table, mod=mod) 
                         stim_all.append([stim1, stim2])
 
                     
