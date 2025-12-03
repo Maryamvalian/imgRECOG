@@ -721,8 +721,8 @@ ds.tail()
 
 # %%
 #TRIM MEG TO HALF SIZE (SHOULD TRIM MEG ONLY TRIMING STIM doesn't WORKS)
-model_dir = "models/samesize/dc"
-mod="dummy"    #effect, dummy
+model_dir = "models/samesize/effect"
+mod="effect"    #effect, dummy
 #sizes = [0.25, 0.5, 1, 2,  3, 4, 6 ,8] 
 sizes = [  3, 4, 6 ,8] 
 for size in sizes:
@@ -979,17 +979,19 @@ for j, size in enumerate(subset_sizes[:-1]):  #skip 1600
 
 
 # %% [markdown]
-# # SUBJECT 10 to 30
-# ## NCRF-DC
+# # All subject (Same session) Data1, Data2 non-overlaping
+
+# %% [markdown]
+#
+# ## Trial size only up to 2
 #
 
 # %%
 mod = "dummy"     
-model_dir = "models/samesize/dc"       #<----------- Dummy: /dc , Effect : /effect
+model_dir = f"models/samesize/1session/{mod}"       
 
 
-sizes = [0.25, 0.5, 1, 2] 
-session="ImageNet01"  #10 to 30 
+sizes = [ 0.25, 0.5, 1, 2] 
 for size in sizes:
     print(f"=================== Size={size}==================")
     ordered_runs = {
@@ -998,16 +1000,22 @@ for size in sizes:
                 }
     order_cut= size if size>=1 else 1
     
-    for i in range (10,31):                 #10 to 30
-                
-        subject = f"sub-{i:02d}"  
-        #print(f"Models for {subject}:")      
+    for i in range (1,31):  
+        
+        # Dataset 1, and Dataset 2 both in the same Session
+        if i>9:
+            session = "ImageNet01"
+        elif i==7:
+            session = "ImageNet04"   
+        else:
+            session = "ImageNet03" 
+        subject = f"sub-{i:02d}"   
           
         
         for model in range (1,3):           #M1, M2
 
             run_list = ordered_runs[model][:int(order_cut)]   
-            #print(f"  M{model}:{run_list}") 
+            
             clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-01_clean_meg.fif"
             clean = mne.io.read_raw_fif(clean_fif, preload=False,verbose=False)
             info= clean.info           
@@ -1017,12 +1025,8 @@ for size in sizes:
             
             
             modelfile = f"{model_dir}/{model}-{size}-{subject}.pickle"
-            morphfile = f"{model_dir}/M{model}-{size}-{subject}.pickle"
             if os.path.exists(modelfile):
                 print(f"{model}-{size}-{subject} model file exists.")
-                continue
-            if os.path.exists(morphfile):
-                print(f"{model}-{size}-{subject} Morph file exists.")
                 continue
             try:        
                 print(f"  computing fwd for {subject}-{session}... ")
@@ -1032,9 +1036,8 @@ for size in sizes:
                 stim_all = []
                 for run in run_list:
                     
-                    #print(f"  Loading session-{session}, run-{run} MEG ...")
+                    print(f"  Loading session-{session}, run-{run} MEG ...")
                     meg= load_meg_ndvar(subject, session, run)
-                    #meg_all.append(meg)
                     event_table= make_event_table(subject, session, run)
                     
                     #trim MEG if size<1
@@ -1052,7 +1055,7 @@ for size in sizes:
                         meg_trim = meg.sub(time=(0, t_cut))
                         meg = meg_trim
     
-                    meg_all.append(meg)     #meg or Trimed meg for less than one run
+                    meg_all.append(meg)     
     
         
                     stim1,stim2= make_predictors_for_run(meg, event_table,mod=mod) 
@@ -1071,7 +1074,7 @@ for size in sizes:
             
 
 # %% [markdown]
-# # analysis
+# # Analysis of Trial Size
 
 # %%
 sizes = [0.25, 0.5, 1, 2, 4, 6, 8] #for i<10
@@ -1393,122 +1396,19 @@ plt.show()
 
 
 # %% [markdown]
-# # Experiement: Population size
-
-# %%
-#with standard error of mean (sEM) :how precisely your sample’s mean (average) estimates the true population mean.
-#How precisely do we know the group mean?
-
-model_dir = "models/samesize/dc"
-sizes = [0.25, 0.5 , 1, 2]   #trail size 50,100,200,400
-all_subjects = [i for i in range(1, 31) if i not in [4, 6, 7]]
-population_sizes = [5, 7, 9, 11,15, 21, 27]
-n_resamples = 20
-
-def load_contrast(subject, size):
-    """Compute correlation for given subject and subset size."""
-    subject = f"sub-{subject:02d}"
-    inan1, anim1 = load.unpickle(f"{model_dir}/M1-{size}-{subject}.pickle")
-    inan2, anim2 = load.unpickle(f"{model_dir}/M2-{size}-{subject}.pickle")
-    d1 = anim1 - inan1
-    d2 = anim2 - inan2
-    d1_flat = d1.get_data().ravel()
-    d2_flat = d2.get_data().ravel()
-    if np.std(d1_flat) == 0 or np.std(d2_flat) == 0:
-        return np.nan
-    return np.corrcoef(d1_flat, d2_flat)[0, 1]
-#---------------
-results_all = []
-
-for size in sizes:
-    results = []
-    for pop_size in population_sizes:
-        rs = []
-        for i in range(n_resamples):
-            selected = random.sample(all_subjects, pop_size)
-            group_r = []
-            for subj in selected:
-                try:
-                    r = load_contrast(subj, size)
-                    if not np.isnan(r):
-                        group_r.append(r)
-                except Exception as e:
-                    print(f"Skipping sub-{subj:02d} at size {size}: {e}")
-            if group_r:
-                rs.append(np.mean(group_r))
-        results.append({
-            "Subset Size": int(size * 200),
-            "Population Size": pop_size,
-            "Mean r": np.nanmean(rs),
-            "SEM": np.nanstd(rs) / np.sqrt(len(rs))
-        })
-    df_size = pd.DataFrame(results)
-    results_all.append(df_size)
-
-df_all = pd.concat(results_all, ignore_index=True)
-
-# plot
-plt.figure(figsize=(7, 4))
-palette = {50: "#77B255", 100: "#FFD700", 200: "#E68632", 400: "#3777B0"}  
-
-for subset in df_all["Subset Size"].unique():
-    df_sub = df_all[df_all["Subset Size"] == subset]
-    plt.errorbar(df_sub["Population Size"], df_sub["Mean r"],
-                 yerr=df_sub["SEM"],
-                 fmt='o-', lw=2.2, capsize=4,
-                 label=f"{subset} trials",
-                 color=palette[subset])
-
-plt.xlabel("Number of Subjects", fontsize=11)
-plt.ylabel("Mean Pearson r ", fontsize=11)
-plt.title("Population Size Effect (NCRF-DC)on Reliability", fontsize=13)
-plt.ylim(0, 0.8)
-plt.grid(True, linestyle="--", alpha=0.6)
-plt.legend(title="Subset Size", frameon=False)
-plt.xticks(df_all["Population Size"].unique().astype(int))
-plt.xlim(min(population_sizes) - 1, max(population_sizes) + 1)
-plt.tight_layout()
-plt.show()
-
-
-# %%
-#read mus from current model (auto mu)
-# ----------
-model_dir = "models/samesize/dc"
-size = 2   
-subjects = [i for i in range(10, 31) if i not in [4, 6, 7]]
-
-mu_data = []
-for subj in subjects:
-    subject = f"sub-{subj:02d}"
-    for m in [1, 2]:
-        model_path = f"{model_dir}/{m}-{size}-{subject}.pickle"
-        try:
-            model = load.unpickle(model_path)
-            mu = model.mu if hasattr(model, "mu") else np.nan
-            mu_data.append({
-                "Subject": subject,
-                "Model": f"M{m}",
-                "mu": mu})  
-        except Exception as e:
-            print(f"Skipping {subject}, M{m}: {e}")
-
-df_mu = pd.DataFrame(mu_data)
-print("\nSummary of mu values (size=400 trials):")
-print(df_mu.head())
-print("\nOverall mu statistics:")
-print(df_mu["mu"].describe())
+# # Regularization EXP. ========Mu=======
 
 # %% [markdown]
-# # Mu
-# ## fir ncrf 10 to 31 - for mus
+#
+# ## FIT NCRF 10 to 31 
 
 # %%
+mod = "dummy"
 
-mod = "effect"
+
 sizes = [2]  
 subjects = range(10, 31)   
-mu_values = [1e-7, 1e-6, 1e-5, 4e-5, 1e-4, 4e-4, 1e-3]       
+mu_values = [1e-8, 1e-7, 1e-6, 1e-5, 4e-5, 1e-4, 4e-4, 1e-3]       
 # ---------------------------
 model_dir = "models/mu" if mod == "dummy" else  "models/mu/ec"
 ordered_runs = {
