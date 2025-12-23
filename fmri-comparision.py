@@ -190,20 +190,6 @@ result_inan = testnd.Vector('ncrf', match='subject', data=data_inan, tfce=True, 
 result_an = testnd.Vector('ncrf', match='subject', data=data_an, tfce=True, tstart=1, tstop=600,samples=1000)
 
 # %%
-#t_maps
-t_an = result_an.t2
-t_in = result_inan.t2
-
-t_diff_descriptive = t_an - t_in 
-
-
-t_static = t_diff_descriptive.sub(time=(150, 250)).mean('time')   # example: 150–250 ms
-p = plot.brain.brain(t_static, cmap='cold_hot', title='(Descriptive) t_an - t_in')
-
-
-# %%
-
-# %%
 p = plot.Butterfly(result_inan.masked_difference().norm('space'), color='k')
 times = [130,240,400]
 for t in times:
@@ -237,5 +223,80 @@ for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(diff.sub(time=t),title=f"diff: animate-Inanimate, {t}s") 
+
+# %%
+
+# %%
+
+
+
+
+
+
+
+
+# %%
+
+# %%
+
+# %%
+
+# %% [markdown]
+# ### Contrast then testnd.vector
+
+# %%
+ds_an = data_avg.sub("animacy == 'animate'")
+ds_in = data_avg.sub("animacy == 'inanimate'")
+
+ds_an.sort('subject')  
+ds_in.sort('subject')   
+
+ds_diff = ds_an.copy()
+ds_diff['ncrf'] = ds_an['ncrf'] - ds_in['ncrf']
+
+result_diff = testnd.Vector(
+    'ncrf', match='subject', data=ds_diff,
+    tfce=True, tstart=1, tstop=600, samples=5000
+)
+
+
+
+# %%
+print(result_diff)
+
+
+# %%
+stat = result_diff.t2  
+#collaps time
+stat_static = stat.sub(time=(100, 500)).mean('time')
+f = plot.GlassBrain(
+    stat_static,
+    cmap='cold_hot',
+    title='Animate – Inanimate (Hotelling T², 150–250 ms)'
+)
+f.plot_colorbar()
+
+# %%
+ds_an['ncrf_mag'] = ds_an['ncrf'].norm('space')
+ds_in['ncrf_mag'] = ds_in['ncrf'].norm('space')
+
+ds_diff['ncrf_mag'] = ds_an['ncrf_mag'] - ds_in['ncrf_mag']
+
+result = testnd.TTestOneSample(
+    'ncrf_mag', match='subject', data=ds_diff,
+    tfce=True, tstart=1, tstop=600,  samples=1000
+)
+
+
+# %%
+t_map = result.t                      
+t_static = t_map.sub(time=(400, 450)).mean('time')
+
+f = plot.GlassBrain(
+    t_static,
+    cmap='cold_hot',
+    title='t value'
+)
+f.plot_colorbar()
 
 # %%
