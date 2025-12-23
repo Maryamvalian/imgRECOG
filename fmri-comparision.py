@@ -290,13 +290,16 @@ result = testnd.TTestOneSample(
 
 # %%
 t_map = result.t                      
-t_static = t_map.sub(time=(400, 450)).mean('time')
+t_static = t_map.sub(time=(100, 150)).mean('time')
 
 f = plot.GlassBrain(
     t_static,
     cmap='cold_hot',
     title='t value'
 )
-f.plot_colorbar()
+#f.plot_colorbar()
+
+# %%
+print(t_static.x.min(), t_static.x.max())
 
 # %%
