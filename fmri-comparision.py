@@ -363,7 +363,7 @@ f = plot.GlassBrain(
 f.plot_colorbar()
 
 
-p_static = result.p.sub(time=(220, 240)).min('time')
+p_static = result.p.sub(time=(220, 230)).min('time')
 
 # mask: significant
 mask =  (p_static.x < 0.05)   #(t_static.x < 0) &
@@ -398,6 +398,36 @@ t_neg.x = -t_neg.x
 
 plot.GlassBrain(t_pos, cmap='hot', title='Animate > Inanimate')
 plot.GlassBrain(t_neg, cmap='hot', title='Inanimate > Animate')
+
+
+# %%
+
+# %%
+
+# %%
+stat = res.t2         
+pmap = res.p          
+
+
+times = [110, 250, 350, 500]
+
+for t in times:
+    stat_snap = stat.sub(time=(t-1, t+1)).mean('time')
+    p_snap = pmap.sub(time=(t-1, t+1)).min('time')  
+
+    #significance
+    masked = stat_snap * (p_snap < 0.05)
+
+    
+    f = plot.GlassBrain(
+        masked,
+        cmap='cold_hot',          
+        vmin=0,
+        vmax=masked.x.max() if masked.x.max() > 0 else 1,
+        symmetric_cbar=False,
+        title=f"TFCE significant T² (p<0.05), ~{t} ms"
+    )
+    f.plot_colorbar()
 
 
 # %%
