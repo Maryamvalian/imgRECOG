@@ -294,12 +294,86 @@ t_static = t_map.sub(time=(100, 150)).mean('time')
 
 f = plot.GlassBrain(
     t_static,
-    cmap='cold_hot',
+    #cmap='cold_hot',
     title='t value'
 )
-#f.plot_colorbar()
+f.plot_colorbar()
 
 # %%
 print(t_static.x.min(), t_static.x.max())
+
+# %%
+
+# %%
+
+# %%
+
+# %%
+from eelbrain import plot
+
+t_map = result.t
+
+# 1) Butterfly plot across sources over time
+p = plot.Butterfly(t_map, color='k')
+times = [120, 250, 500]
+for tt in times:
+    p.add_vline(tt)
+
+# 2) GlassBrain snapshots at selected times
+for tt in times:
+    t_snap = t_map.sub(time=(tt - 1, tt + 1)).mean('time')  # 2 ms window
+    v = abs(t_snap.x).max()  # symmetric scaling for this snapshot
+
+    f = plot.GlassBrain(
+        t_snap,
+        cmap='cold_hot',
+        vmin=-v, vmax=v,
+        title=f"t-map (animate - inanimate), ~{tt} ms"
+    )
+    f.plot_colorbar()
+
+
+# %%
+
+# %%
+
+# %%
+p_static = result.p.sub(time=(100, 150)).min('time')
+
+# mask: positive t AND significant
+mask = (t_static.x < 0) & (p_static.x < 0.05)
+
+t_pos_sig = t_static.copy()
+t_pos_sig.x[~mask] = 0
+
+f = plot.GlassBrain(
+    t_pos_sig,
+    cmap='cold_hot',
+    vmin=t_pos_sig.x.min(),
+    vmax=t_pos_sig.x.min(),
+    title='Negetive and significant (anim < inanim)',
+    symmetric_cbar=False
+)
+f.plot_colorbar()
+
+
+# %%
+
+# %%
+
+# %%
+# positive
+t_pos = t_static.copy()
+t_pos.x[t_pos.x <= 0] = 0
+
+# negative
+t_neg = t_static.copy()
+t_neg.x[t_neg.x >= 0] = 0
+t_neg.x = -t_neg.x
+
+
+plot.GlassBrain(t_pos, cmap='hot', title='Animate > Inanimate')
+plot.GlassBrain(t_neg, cmap='hot', title='Inanimate > Animate')
+
 
 # %%
