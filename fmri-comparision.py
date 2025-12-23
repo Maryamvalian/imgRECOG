@@ -309,20 +309,17 @@ print(t_static.x.min(), t_static.x.max())
 # %%
 
 # %%
-from eelbrain import plot
-
 t_map = result.t
 
-# 1) Butterfly plot across sources over time
 p = plot.Butterfly(t_map, color='k')
 times = [120, 250, 500]
 for tt in times:
     p.add_vline(tt)
 
-# 2) GlassBrain snapshots at selected times
+
 for tt in times:
-    t_snap = t_map.sub(time=(tt - 1, tt + 1)).mean('time')  # 2 ms window
-    v = abs(t_snap.x).max()  # symmetric scaling for this snapshot
+    t_snap = t_map.sub(time=(tt - 1, tt + 1)).mean('time') 
+    v = abs(t_snap.x).max()  
 
     f = plot.GlassBrain(
         t_snap,
@@ -336,12 +333,21 @@ for tt in times:
 # %%
 
 # %%
+ds_an['ncrf_mag'] = ds_an['ncrf'].norm('space')
+ds_in['ncrf_mag'] = ds_in['ncrf'].norm('space')
+
+ds_diff['ncrf_mag'] = ds_an['ncrf_mag'] - ds_in['ncrf_mag']
+
+result = testnd.TTestOneSample(
+    'ncrf_mag', match='subject', data=ds_diff,
+    tfce=True, tstart=1, tstop=600,  samples=1000
+)
 
 # %%
-p_static = result.p.sub(time=(100, 150)).min('time')
+p_static = result.p.sub(time=(100, 120)).min('time')
 
-# mask: positive t AND significant
-mask = (t_static.x < 0) & (p_static.x < 0.05)
+# mask: significant
+mask =  (p_static.x < 0.05)   #(t_static.x < 0) &
 
 t_pos_sig = t_static.copy()
 t_pos_sig.x[~mask] = 0
@@ -350,12 +356,30 @@ f = plot.GlassBrain(
     t_pos_sig,
     cmap='cold_hot',
     vmin=t_pos_sig.x.min(),
-    vmax=t_pos_sig.x.min(),
+    vmax=t_pos_sig.x.max(),
     title='Negetive and significant (anim < inanim)',
     symmetric_cbar=False
 )
 f.plot_colorbar()
 
+
+p_static = result.p.sub(time=(220, 240)).min('time')
+
+# mask: significant
+mask =  (p_static.x < 0.05)   #(t_static.x < 0) &
+
+t_pos_sig = t_static.copy()
+t_pos_sig.x[~mask] = 0
+
+f = plot.GlassBrain(
+    t_pos_sig,
+    cmap='cold_hot',
+    vmin=t_pos_sig.x.min(),
+    vmax=t_pos_sig.x.max(),
+    title='Negetive and significant (anim < inanim)',
+    symmetric_cbar=False
+)
+f.plot_colorbar()
 
 # %%
 
