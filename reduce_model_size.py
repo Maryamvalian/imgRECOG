@@ -231,8 +231,10 @@ len(model._data.meg)
 len(model._data.covariates)
 
 # %%
-len(model._data.tstart) , len(model._data.tstop)    # Per predictor ehtemalan
-
+#Start of the TRF in seconds. Can define multiple tstarts for more than 1 predictor.
+#tstop : float | list[float]
+        #Stop of the TRF in seconds. Can define multiple tstops for more than 1 predictor.
+len(model._data.tstart) , len(model._data.tstop)   
 
 # %%
 model._data.tstep
@@ -244,6 +246,8 @@ len(model._data._bE)
 len(model._data._stim_names) , model._data._stim_names[0] ,model._data._stim_names[0]
 
 # %%
-model._data.nlevel
+# Decides the density of Gabor atoms. Bigger nlevel -> less dense basis
+#By default it is set to `1`. `nlevesl > 2` should be used with caution
+model._data.nlevel 
 
 # %%
