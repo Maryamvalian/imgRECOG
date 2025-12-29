@@ -251,3 +251,18 @@ len(model._data._stim_names) , model._data._stim_names[0] ,model._data._stim_nam
 model._data.nlevel 
 
 # %%
+len(model._data.s_baseline)
+
+# %%
+#stores the value that was removed from each predictor so the stimulus is mean-centered before regression
+# mean for predictor 0
+model._data.s_baseline[0]                   
+
+# %%
+#divisor for normalization based on normalize otion : l1 ,..
+len(model._data.s_scaling)
+
+# %%
+model._data.s_scaling[0]
+
+# %%
