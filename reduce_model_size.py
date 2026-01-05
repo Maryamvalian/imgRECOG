@@ -14,20 +14,13 @@
 
 # %%
 import mne
-import pandas as pd
-import numpy as np
-#from mne import *
-from ncrf import fit_ncrf
-from eelbrain import NDVar, UTS
-from eelbrain import plot, combine
 from eelbrain import *
-from eelbrain._data_obj import VolumeSourceSpace
-import os
+import numpy as np
 from pathlib import Path
+import os
 from Beyond import *
-import eelbrain as eb
-import seaborn as sns
-import random
+from scipy import linalg
+from ncrf._model import RegressionData
 
 # %%
 mod="dummy"  #common, effect, dummy, ortho (effect with unbalanced trial counts)
@@ -154,9 +147,11 @@ for i in range (1,2):                # one subject
     
     
     modelfile = f"models/reduce/{subject}_ncrf.pickle"
+    """
     if os.path.exists(modelfile):
         print(f"{subject} model file exists.")
         continue
+    """    
     try:        
         
         meg_all = []
@@ -171,194 +166,42 @@ for i in range (1,2):                # one subject
             predictors=[stim1,stim2]
             stim_all.append(predictors)  
             
+        """
         args = (meg_all , stim_all, fwd , noise_cov , 0,0.7)
         kwargs = {'normalize': 'l1','in_place': False,'mu':1e-3,
                   'verbose': True,'n_iter': 5,'n_iterc':5,'n_iterf': 10}        
         model = fit_ncrf(*args, **kwargs)  
         save.pickle(model, modelfile)
         print(f"\nModel saved to {modelfile}\n")  
-        
+        """
     except Exception as e:
      print(f"\n----------- Error processing {subject}: {e}\n")   
+    print("Meg, Stimulus ready!")  
 
 # %%
-model.mu
-
-# %%
-model._data
-
-# %%
-type(model._data)
-
-# %%
-import pickle
-for attr in model._PICKLE_ATTRS:
-    s = pickle.dumps(getattr(model, attr))
-    print(len(s), ' ', attr)
-
-# %%
-model._data.__dict__.keys()
+model= load.unpickle("models/reduce/sub-01_ncrf")
+model.explained_var, model.compute_explained_variance(model._data)
 
 
 # %%
-type(model._data._bE)     #b^T E   : B time-lagged stimulus matrix, E whitened MEG for each run
-
-# %%
-len(model._data._bE)      # be tedade run-ha hast subset = 2,5,3
-
-# %%
-len(model._data._EtE) , model._data._EtE[0].shape
-
-# %%
-len(model._data._bbt) , model._data._bbt[0].shape
-
-# %%
-x = model._data._bE[0]             #First run
-x.shape ,x.dtype
-
-# %% [markdown]
-# # It is not necessary to store BE
-# 1. Build RegressionData(meg_all, stim_all, ...)
-# 2. That constructor recomputes:
-#    - covariates
-#    - whitened MEG
-#    - BᵀE → _bE
-#    - BᵀB → _bbt
-#    - EᵀE → _EtE
-
-# %%
-what=model._data.tstart
-what
-
-# %%
-len(model._data.meg)
-
-# %%
-len(model._data.covariates)
-
-# %%
-#Start of the TRF in seconds. Can define multiple tstarts for more than 1 predictor.
-#tstop : float | list[float]
-        #Stop of the TRF in seconds. Can define multiple tstops for more than 1 predictor.
-len(model._data.tstart) , len(model._data.tstop)   
-
-# %%
-model._data.tstep
-
-# %%
-len(model._data._bE)
-
-# %%
-len(model._data._stim_names) , model._data._stim_names[0] ,model._data._stim_names[0]
-
-# %%
-# Decides the density of Gabor atoms. Bigger nlevel -> less dense basis
-#By default it is set to `1`. `nlevesl > 2` should be used with caution
-model._data.nlevel 
-
-# %%
-len(model._data.s_baseline)
-
-# %%
-#stores the value that was removed from each predictor so the stimulus is mean-centered before regression
-# mean for predictor 0
-model._data.s_baseline[0]                   
-
-# %%
-#divisor for normalization based on normalize otion : l1 ,..
-len(model._data.s_scaling)
-
-# %%
-model._data.s_scaling[0]
-
-# %%
-len(model._data.s_normalization )   #for each run
-
-# %%
-model._data.s_normalization[0]   # for run0, for each predictor l1 normwt is the differe
-
-# %%
-model.tstop
-
-# %%
-model.tstart
-
-# %%
-model.tstep
-
-# %%
-len(model._data.meg)
-
-# %%
-model._data.meg[0].shape             #channels* timepoints
-
-# %%
-model._data.meg[0] is meg_all[0].x
-
-# %%
-(meg_all[0].x.shape)
-
-# %%
-type(model._data.meg[0])
-
-# %%
-model._data._prewhitened
-
-# %%
-model._data.filter_length
-
-# %%
-model._data.start, model._data.stop
-
-# %%
-model.gaussian_fwhm
-
-# %%
-model._data.gaussian_fwhm
-
-# %%
-len(model._data.basis)
-
-# %%
-model._data.basis[0].shape             #number of lag * number of basis functions
-
-# %%
-model._basis[0].shape
-
-# %%
-model.nlevel
-
-# %%
-# Full, self-contained script to:
-# 1) Reconstruct RegressionData heavy cached arrays from meg_all, stim_all, noise_cov, and model metadata
-# 2) Compare reconstructed arrays with model._data (meg, covariates, _bbt, _bE, _EtE)
-
-import numpy as np
-from scipy import linalg
-
-# Adjust this import if your package path differs
-# It must point to the RegressionData class you pasted from _model.py
-from ncrf._model import RegressionData
-
-
 def inv_sqrtm_whitener_from_cov(noise_cov: np.ndarray) -> np.ndarray:
     """
-    Compute a whitening matrix W such that W @ cov @ W.T ≈ I
-    This is only used if you do NOT pass model._whitening_filter.
-    For an exact match with cached data, pass whitening_filter=model._whitening_filter.
+    Compute whitening matrix W such that W @ cov @ W.T ≈ I.
+    Used only if you do NOT pass whitening_filter explicitly.
     """
     e, v = linalg.eigh(noise_cov)
     e = np.real(e)
     tol = np.finfo(np.float64).eps * 1e2 * e.max()
     keep = e > tol
+
     inv_sqrt = np.zeros_like(e)
     inv_sqrt[keep] = 1.0 / np.sqrt(e[keep])
-    # W has shape (n_sensors, n_sensors)
-    W = (inv_sqrt[:, None] * v.T)
-    return W
+
+    # shape: (n_sensors, n_sensors)
+    return (inv_sqrt[:, None] * v.T)
 
 
-def reconstruct_heavy_cached_arrays(
+def reconstruct_data(
     meg_all,
     stim_all,
     noise_cov,
@@ -371,15 +214,10 @@ def reconstruct_heavy_cached_arrays(
     stim_is_single=None,
     gaussian_fwhm=20.0,
     whitening_filter=None,
+    in_place=False,
+    do_post_normalization=True,
 ):
-    """
-    Rebuild the heavy cached arrays exactly the same way RegressionData does:
-      - data.add_data(...) -> builds data.meg and data.covariates
-      - data._prewhiten(W) -> applies whitening to data.meg
-      - data._precompute() -> builds _bbt, _bE, _EtE
-
-    Returns a dict with meg, covariates, _bbt, _bE, _EtE, and the RegressionData instance.
-    """
+    
     if len(meg_all) != len(stim_all):
         raise ValueError(f"len(meg_all)={len(meg_all)} must match len(stim_all)={len(stim_all)}")
 
@@ -397,9 +235,17 @@ def reconstruct_heavy_cached_arrays(
     )
 
     for meg, stim in zip(meg_all, stim_all):
+        # match fit_ncrf(in_place=False): do not modify original stim in-place
+        if not in_place:
+            if isinstance(stim, (list, tuple)):
+                stim = [s.copy() for s in stim]
+            else:
+                stim = stim.copy()
         data.add_data(meg, stim)
 
-    # Apply whitening and compute caches
+    if do_post_normalization:
+        data.post_normalization()
+
     data._prewhiten(whitening_filter)
     data._precompute()
 
@@ -413,10 +259,10 @@ def reconstruct_heavy_cached_arrays(
     }
 
 
-def compare_list_of_arrays(name, recon_list, cached_list, rtol=1e-10, atol=1e-12):
+def compare_list_of_arrays(name, recon_list, cached_list, rtol=1e-10, atol=1e-5):
     """
-    Compare two lists of numpy arrays.
-    Raises AssertionError with useful debugging info if mismatch is found.
+    Compare two lists of numpy arrays (run-by-run).
+    Raises AssertionError with detailed debugging info on mismatch.
     """
     if len(recon_list) != len(cached_list):
         raise AssertionError(f"{name}: length mismatch {len(recon_list)} vs {len(cached_list)}")
@@ -431,27 +277,27 @@ def compare_list_of_arrays(name, recon_list, cached_list, rtol=1e-10, atol=1e-12
             raise AssertionError(
                 f"{name}[{i}]: values differ\n"
                 f"  max abs diff: {diff}\n"
-                f"  at index: {where}\n"
+                f"  worst index: {where}\n"
                 f"  recon value: {a[where]}\n"
                 f"  cached value: {b[where]}\n"
             )
 
 
-def reconstruct_and_compare_with_model(model, meg_all, stim_all, noise_cov, rtol=1e-10, atol=1e-12):
+def reconstruct_and_compare_with_model(model, meg_all, stim_all, noise_cov, rtol=1e-10, atol=1e-5):
     """
-    Reconstruct and compare against model._data for:
+    Reconstruct heavy cached arrays and compare them to model._data:
       - meg
       - covariates
       - _bbt
       - _bE
       - _EtE
 
-    Uses model._whitening_filter for exact match, and uses nlevel from model._data (since it is only there).
+    Returns recon dict (including recon["data"]).
     """
-    if model._data is None:
-        raise ValueError("model._data is None. You need the cached data present to compare.")
+    if getattr(model, "_data", None) is None:
+        raise ValueError("model._data is None. Load the full model (with _data) to compare.")
 
-    recon = reconstruct_heavy_cached_arrays(
+    recon = reconstruct_data(
         meg_all=meg_all,
         stim_all=stim_all,
         noise_cov=noise_cov,
@@ -462,11 +308,12 @@ def reconstruct_and_compare_with_model(model, meg_all, stim_all, noise_cov, rtol
         scaling=model._stim_scaling,
         stim_is_single=model._stim_is_single,
         gaussian_fwhm=model.gaussian_fwhm,
-        whitening_filter=model._whitening_filter,  # key line for exact match
+        whitening_filter=model._whitening_filter,  # best match
+        in_place=False,
+        do_post_normalization=True,
     )
 
     d = model._data
-
     compare_list_of_arrays("meg", recon["meg"], d.meg, rtol=rtol, atol=atol)
     compare_list_of_arrays("covariates", recon["covariates"], d.covariates, rtol=rtol, atol=atol)
     compare_list_of_arrays("_bbt", recon["_bbt"], d._bbt, rtol=rtol, atol=atol)
@@ -478,26 +325,6 @@ def reconstruct_and_compare_with_model(model, meg_all, stim_all, noise_cov, rtol
 
 
 
-
-
- # %%
- recon = reconstruct_and_compare_with_model(
-     model=model,
-     meg_all=meg_all,
-     stim_all=stim_all,
-     noise_cov=noise_cov,
-     rtol=1e-10,
-     atol=1e-5,              #absolute tolerance |a-b|<=atol+rtol*|b| #handle error near zero
- )
-
-# %%
-model.explained_var
-
-# %%
-origin_data=model._data
-ev = model.compute_explained_variance(origin_data)
-ev
-
 # %%
 # Test : compute_explained_variance
 
@@ -505,7 +332,7 @@ origin_data = model._data
 ev_orig = model.compute_explained_variance(origin_data)
 print("EV original:", ev_orig)
 
-recon = reconstruct_heavy_cached_arrays(
+recon = reconstruct_data(
     meg_all=meg_all,
     stim_all=stim_all,
     noise_cov=noise_cov,
@@ -530,85 +357,5 @@ print("diff:", diff)
 
 print("EV allclose:", np.allclose(ev_recon, ev_orig, rtol=1e-10, atol=1e-8))
 
-
-# %%
-model.nlevel = model._data.nlevel
-model._data = None
-
-
-# %%
-model= load.unpickle("models/reduce/sub-01_ncrf")
-
-# %%
-#model.nlevel      #this way it is not saved by ncrf class
-
-# %%
-model._stim_normalization = {
-    "s_normalization": model._stim_normalization,
-    "nlevel": model._data.nlevel,
-}
-model._data = None
-reduced_modelfile = "models/reduce/sub-01_ncrf_reduced.pickle"
-save.pickle(model, reduced_modelfile)
-
-# %%
-m2 = load.unpickle(reduced_modelfile)
-recon = reconstruct_heavy_cached_arrays(
-    meg_all=meg_all,
-    stim_all=stim_all,
-    noise_cov=noise_cov,
-    tstart=m2.tstart,
-    tstop=m2.tstop,
-    nlevel=m2._stim_normalization["nlevel"],
-    baseline=m2._stim_baseline,
-    scaling=m2._stim_scaling,
-    stim_is_single=m2._stim_is_single,
-    gaussian_fwhm=m2.gaussian_fwhm,
-    whitening_filter=m2._whitening_filter,
-    in_place=False,
-    do_post_normalization=True,
-)
-
-ev = m2.compute_explained_variance(recon["data"])
-print("EV (reloaded reduced model):", ev)
-
-
-# %%
-def attach_recon_data(model, recon_data, *, overwrite=False):
-    
-    if model._data is not None and not overwrite:
-        raise ValueError(
-            "model._data already exists. "
-            "Use overwrite=True if you really want to replace it."
-        )
-
-    
-    model._data = recon_data
-
-    
-    if model.tstart != recon_data.tstart:
-        raise ValueError("tstart mismatch between model and reconstructed data")
-
-    if model.tstop != recon_data.tstop:
-        raise ValueError("tstop mismatch between model and reconstructed data")
-
-    if model.gaussian_fwhm != recon_data.gaussian_fwhm:
-        raise ValueError("gaussian_fwhm mismatch")
-
-    return model
-
-
-# %%
-attach_recon_data(m2, recon["data"])
-
-# %%
-ev = m2.compute_explained_variance(m2._data)
-ev
-
-# %% [markdown]
-# m2.h
-
-# %%
-m2.h
 
 # %%
