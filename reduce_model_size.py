@@ -131,6 +131,8 @@ def make_predictors_for_run(meg_ndvar, event_table,mod):
 
 
 # %%
+# create megall[] , stimall[] used to estimate model
+# model is already stimated and saved
 for i in range (1,2):                # one subject
     session="ImageNet03"
     subject = f"sub-{i:02d}"
@@ -182,13 +184,12 @@ for i in range (1,2):                # one subject
 model= load.unpickle("models/reduce/sub-01_ncrf")
 model.explained_var, model.compute_explained_variance(model._data)
 
-
 # %%
+"""
 def inv_sqrtm_whitener_from_cov(noise_cov: np.ndarray) -> np.ndarray:
-    """
-    Compute whitening matrix W such that W @ cov @ W.T ≈ I.
-    Used only if you do NOT pass whitening_filter explicitly.
-    """
+    
+    #Used only if you do NOT pass whitening_filter explicitly.
+   
     e, v = linalg.eigh(noise_cov)
     e = np.real(e)
     tol = np.finfo(np.float64).eps * 1e2 * e.max()
@@ -199,7 +200,7 @@ def inv_sqrtm_whitener_from_cov(noise_cov: np.ndarray) -> np.ndarray:
 
     # shape: (n_sensors, n_sensors)
     return (inv_sqrt[:, None] * v.T)
-
+"""
 
 def reconstruct_data(
     meg_all,
@@ -235,7 +236,7 @@ def reconstruct_data(
     )
 
     for meg, stim in zip(meg_all, stim_all):
-        # match fit_ncrf(in_place=False): do not modify original stim in-place
+        
         if not in_place:
             if isinstance(stim, (list, tuple)):
                 stim = [s.copy() for s in stim]
@@ -260,10 +261,7 @@ def reconstruct_data(
 
 
 def compare_list_of_arrays(name, recon_list, cached_list, rtol=1e-10, atol=1e-5):
-    """
-    Compare two lists of numpy arrays (run-by-run).
-    Raises AssertionError with detailed debugging info on mismatch.
-    """
+    
     if len(recon_list) != len(cached_list):
         raise AssertionError(f"{name}: length mismatch {len(recon_list)} vs {len(cached_list)}")
 
@@ -276,24 +274,13 @@ def compare_list_of_arrays(name, recon_list, cached_list, rtol=1e-10, atol=1e-5)
             where = np.unravel_index(np.argmax(np.abs(a - b)), a.shape)
             raise AssertionError(
                 f"{name}[{i}]: values differ\n"
-                f"  max abs diff: {diff}\n"
-                f"  worst index: {where}\n"
                 f"  recon value: {a[where]}\n"
                 f"  cached value: {b[where]}\n"
             )
 
 
 def reconstruct_and_compare_with_model(model, meg_all, stim_all, noise_cov, rtol=1e-10, atol=1e-5):
-    """
-    Reconstruct heavy cached arrays and compare them to model._data:
-      - meg
-      - covariates
-      - _bbt
-      - _bE
-      - _EtE
-
-    Returns recon dict (including recon["data"]).
-    """
+   
     if getattr(model, "_data", None) is None:
         raise ValueError("model._data is None. Load the full model (with _data) to compare.")
 
@@ -308,7 +295,7 @@ def reconstruct_and_compare_with_model(model, meg_all, stim_all, noise_cov, rtol
         scaling=model._stim_scaling,
         stim_is_single=model._stim_is_single,
         gaussian_fwhm=model.gaussian_fwhm,
-        whitening_filter=model._whitening_filter,  # best match
+        whitening_filter=model._whitening_filter,  
         in_place=False,
         do_post_normalization=True,
     )
@@ -357,5 +344,94 @@ print("diff:", diff)
 
 print("EV allclose:", np.allclose(ev_recon, ev_orig, rtol=1e-10, atol=1e-8))
 
+
+# %%
+recon = reconstruct_and_compare_with_model(
+    model=model,
+    meg_all=meg_all,
+    stim_all=stim_all,
+    noise_cov=noise_cov,
+    rtol=1e-12,
+    atol=1e-10,
+)
+
+# %%
+#Reduced And Save
+reduced_model=model
+reduced_model._stim_normalization = {
+    "s_normalization": reduced_model._stim_normalization,
+    "nlevel": reduced_model._data.nlevel,
+}
+reduced_model._data = None
+reduced_modelfile = "models/reduce/sub-01_reduced.pickle"
+save.pickle(reduced_model, reduced_modelfile)
+
+# %%
+#reconstruct
+m2 = load.unpickle(reduced_modelfile)
+recon = reconstruct_data(
+    meg_all=meg_all,
+    stim_all=stim_all,
+    noise_cov=noise_cov,
+    tstart=m2.tstart,
+    tstop=m2.tstop,
+    nlevel=m2._stim_normalization["nlevel"],
+    baseline=m2._stim_baseline,
+    scaling=m2._stim_scaling,
+    stim_is_single=m2._stim_is_single,
+    gaussian_fwhm=m2.gaussian_fwhm,
+    whitening_filter=m2._whitening_filter,
+    in_place=False,
+    do_post_normalization=True,
+)
+
+ev = m2.compute_explained_variance(recon["data"])
+print("EV (reloaded reduced model):", ev)
+
+
+# %%
+#Attach _data again to the model
+def attach_recon_data(model, recon_data, *, overwrite=False):
+    
+    if model._data is not None and not overwrite:
+        raise ValueError(
+            "model._data already exists. "
+        )
+
+    
+    model._data = recon_data
+
+    
+    if model.tstart != recon_data.tstart:
+        raise ValueError("tstart mismatch between model and reconstructed data")
+
+    if model.tstop != recon_data.tstop:
+        raise ValueError("tstop mismatch between model and reconstructed data")
+
+    if model.gaussian_fwhm != recon_data.gaussian_fwhm:
+        raise ValueError("gaussian_fwhm mismatch")
+
+    return model
+
+
+# %%
+attach_recon_data(m2, recon["data"])
+ev = m2.compute_explained_variance(m2._data)
+
+# %%
+ev
+
+# %%
+#compare pickle size
+full = Path("models/reduce/sub-01_ncrf.pickle")
+reduced = Path("models/reduce/sub-01_ncrf_reduced.pickle")
+
+for label, path in [("Full", full), ("Reduced", reduced)]:
+    size_mb = path.stat().st_size / (1024 ** 2)
+    print(f"{label} model: {size_mb:.2f} MB")
+
+
+# %%
+ev
 
 # %%
