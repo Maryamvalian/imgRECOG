@@ -187,12 +187,7 @@ model.explained_var, model.compute_explained_variance(model._data)
 # %%
 model.reduce_data()
 save.pickle(model, "models/reduce/sub-01_ncrf_reduced.pickle")
-
-# %%
 data = model.reconstruct_data(meg_all, stim_all, attach=True)
-
-# %%
-model._data
 
 # %%
 #compare pickle size
