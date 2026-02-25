@@ -10,6 +10,7 @@ from eelbrain._data_obj import VolumeSourceSpace
 #from scipy.sparse import block_diag, csr_matrix
 from scipy.spatial import cKDTree
 import pandas as pd
+import seaborn as sns
 
 
 
@@ -277,7 +278,7 @@ def morph_hemi(stc_vec, subject, subject_to="fsaverage2", *, subjects_dir, src_t
     an_both = load.mne.stc_ndvar(stc_vec_fs_both, src=src_tag,
                                  subjects_dir=subjects_dir, subject=subject_to)
 
-    return an_R_fs, an_L_fs, an_both
+    return an_R_fs, an_L_fs,an_both
     
  #------------------------------------------------------
 
@@ -403,3 +404,38 @@ def ndvar_AWcosine(nd1, nd2, thr=1e-12, mode="or"):
     return cos_aw_t, n_used, times
 #--------------------------------
 
+def plot_raw_contrast_subject(subject, results_by_method, out_dir=None):
+    
+    frames = []
+    for method, res in results_by_method.items():
+        df = res["raw"].query('subject == @subject and kind == "contrast"')[["Subset Size", "r"]].copy()
+        df["method"] = method
+        frames.append(df)
+
+    df_all = pd.concat(frames, ignore_index=True)
+    if df_all.empty:
+        raise ValueError(f"No raw contrast rows found for {subject}")
+
+    df_all["Subset Size"] = pd.Categorical(
+        df_all["Subset Size"],
+        categories=sorted(df_all["Subset Size"].unique()),
+        ordered=True
+    )
+
+    sns.set_theme(style="whitegrid")
+    plt.figure(figsize=(8, 4.5))
+    ax = sns.lineplot(data=df_all, x="Subset Size", y="r", hue="method", marker="o")
+    ax.set_title(f"Within-subject Contrast Correlations ({subject})")
+    ax.set_xlabel("Number of Trials")
+    ax.set_ylabel("Pearson r")
+    ax.set_ylim(-0.2, 1)
+    ax.legend(title="Method", loc="upper left")
+    plt.tight_layout()
+
+    if out_dir is not None:
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_pdf = out_dir / f"{subject}_raw_contrast_r.pdf"
+        plt.savefig(out_pdf, bbox_inches="tight")
+        plt.close()
+        return str(out_pdf)
