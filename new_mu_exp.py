@@ -794,7 +794,6 @@ for mod in mods:
         "all_chebyshevs": all_chebyshevs,
     }
 
-# Plot 1: Pearson r
 plt.figure(figsize=(7, 5))
 for mod in mods:
     marker = '^' if mod == "dummy" else 'o'
@@ -808,7 +807,7 @@ plt.grid(True)
 plt.legend()
 plt.show()
 
-# Plot 2: Cityblock similarity
+
 plt.figure(figsize=(7, 5))
 for mod in mods:
     marker = '^' if mod == "dummy" else 'o'
@@ -822,7 +821,7 @@ plt.grid(True)
 plt.legend()
 plt.show()
 
-# Plot 3: Chebyshev similarity
+
 plt.figure(figsize=(7, 5))
 for mod in mods:
     marker = '^' if mod == "dummy" else 'o'
