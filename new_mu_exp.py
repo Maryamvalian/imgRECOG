@@ -680,7 +680,6 @@ def distance_to_similarity(distances):
 
     return 1 - (distances - dmin) / (dmax - dmin)
 """
-
 cityblock_similarity = distance_to_similarity(mean_cityblocks)
 chebyshev_similarity = distance_to_similarity(mean_chebyshevs)
 
