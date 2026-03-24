@@ -368,9 +368,9 @@ def ndvar_AWcosine(nd1, nd2, thr=1e-12, mode="or"):
     times = tmin + np.arange(T) * tstep
 
     for t in range(T):
-        Ai = A[:, :, t]                          
+        Ai = A[:, :, t]      # 3D vector at time point t                         
         Bi = B[:, :, t]
-        aN = np.linalg.norm(Ai, axis=1)         
+        aN = np.linalg.norm(Ai, axis=1)   # norm of vector at time t      
         bN = np.linalg.norm(Bi, axis=1)
 
         if mode.lower() == "and":
@@ -383,12 +383,14 @@ def ndvar_AWcosine(nd1, nd2, thr=1e-12, mode="or"):
         if not np.any(valid):
             continue
 
-        Ai_v = Ai[valid]
+        Ai_v = Ai[valid]          #Valid : satisfy threshold
         Bi_v = Bi[valid]
         aN_v = aN[valid]
         bN_v = bN[valid]
 
-        # voxel cosine 
+        # voxel cosine      Cos_i = (A_i . B_i) / (||A_i|| *||B_i||)
+
+        
         dots  = np.einsum('ij,ij->i', Ai_v, Bi_v)   # <A_i, B_i>
         cos_i = dots / (aN_v * bN_v)                # (n_vox_t,)
 
