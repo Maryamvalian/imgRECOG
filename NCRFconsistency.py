@@ -34,12 +34,108 @@ import seaborn as sns
 # # Estimate NCRF Models M1, M2 for all subjects
 
 # %%
+subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
+fwd_dir=Path("/Users/maryamvalian/Data/ds005810/derivatives/eelbrain/cache/raw")
+
+# %%
 root = Path("~/Data/ds005810")
 empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-noise_meg.fif"
 raw_er = mne.io.read_raw_fif(empty_room, preload=True, verbose=False).pick('meg')
 raw_er.filter(1., 40., phase="zero-double", verbose=False)
 raw_er.resample(100, npad="auto", verbose=False)
 noise_cov = mne.compute_raw_covariance(raw_er, method='shrunk', rank=None,verbose=False)
+
+def compute_fwd_ndvar(subject, session,subject_dir,meg_info,sensor):
+    
+
+    src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif"
+    src = mne.read_source_spaces(str(src_file),verbose=False)
+    
+    bem_sol_fif=f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
+    bem_sol = mne.read_bem_solution(bem_sol_fif,verbose=False)
+    
+    
+    trans_fif= f"{root}/derivatives/trans/{subject}-{session}-trans.fif"
+    trans=mne.read_trans(trans_fif)
+
+    fwd = mne.make_forward_solution(meg_info, trans, src, bem_sol,
+                                    meg=True, eeg=False, mindist=0, verbose=False)
+    fwd_file=fwd_dir / f"{subject}_ses-{session}/{subject}-fwd.fif"
+    fwd_file.parent.mkdir(parents=True, exist_ok=True)
+    mne.write_forward_solution(str(fwd_file), fwd, overwrite=True, verbose=False)
+    #print(f"   Saved FWD to {fwd_file}")
+
+        
+    #convert to ndvar
+    lf = load.mne.forward_operator(fwd,src='vol-7',subjects_dir=subjects_dir,
+                                   adjacency=False,parc='aparc+aseg') 
+    lf  = lf.sub(sensor=sensor)  
+    #print(len(src[0]['vertno']))           #check sanity
+    #print(len(fwd['src'][0]['vertno']))  
+
+
+    return lf
+    
+#-----------------------------------------------
+
+def load_meg_ndvar(subject, session, run):
+    
+    clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_clean_meg.fif"
+    clean = mne.io.read_raw_fif(clean_fif, preload=True,verbose=False)
+    meg=clean
+    meg.filter(1., 40., phase="zero-double", verbose=False)
+    meg.resample(100, npad="auto", verbose=False)
+    meg_nd = load.fiff.raw_ndvar(meg)
+    
+    return meg_nd
+
+
+ 
+#-----------------------------------------
+
+def make_predictors_for_run(meg_ndvar, event_table,mod):
+
+    sfreq = 100  #meg_ndvar.info['sfreq']     #100       
+    n_times = len(meg_ndvar.time)        #32000     
+    
+    time = UTS(0, 1/sfreq, n_times)      #from 0 to 32000/100=320 s
+    stim1 = np.zeros(n_times, dtype=float)  
+    stim2 = np.zeros(n_times, dtype=float) 
+    
+    for t, is_anim in zip(event_table['time'], event_table['animate']):
+        idx = int(round((t ) * sfreq))
+        if 0 <= idx < n_times:
+            if mod=='dummy':
+                
+                if is_anim:
+                    stim2[idx]= 1.0
+                else:
+                    stim1[idx]= 1.0
+                    
+            elif mod=='common':
+                
+                stim1[idx] = 1.0
+                
+            elif mod=='effect':
+                
+                stim1[idx] = 1.0
+                stim2[idx] = 1.0 if is_anim else -1.0
+
+            elif mod=='ortho':
+                
+                n_a =int(event_table['animate'].sum())
+                n_i =int((~event_table['animate']).sum())
+                N=n_a+n_i
+                code_anim,code_inanim = (n_i / N),-(n_a / N)
+                stim1[idx]= 1.0
+                stim2[idx]= code_anim if is_anim else code_inanim
+                    
+    stim1 = NDVar(stim1, time)
+    stim2 = NDVar(stim2, time)
+
+    return stim1,stim2
+    
+
 
 # %%
 mod = "dummy"     
@@ -163,39 +259,15 @@ for mod in ["dummy", "effect"]:
                         fwd = mne.read_forward_solution(str(fwd_file), verbose=False)
                         
                         #morphing 
-                        stc_vec_anim = ndvar_merged_to_stc_lr(
-                            
-                            ndvar=anim,
-                            fwd=fwd,
-                            subject=subject,
-                            subjects_dir=subjects_dir,
-                            src_tag="vol-7",
-                        )
-                        stc_vec_inanim = ndvar_merged_to_stc_lr(
-                            
-                            ndvar=inanim,
-                            fwd=fwd,
-                            subject=subject,
-                            subjects_dir=subjects_dir,
-                            src_tag="vol-7",
-                        )
-                               
-                        an_L_fs, an_R_fs, anim_fs = morph_hemi(
-                            stc_vec_anim,
-                            subject=subject,
-                            subject_to="fsaverage2",
-                            subjects_dir=subjects_dir,
-                            src_tag="vol-7",
-                        )
-                               
-                        _, _, inanim_fs = morph_hemi(
-                            stc_vec_inanim,
-                            subject=subject,
-                            subject_to="fsaverage2",
-                            subjects_dir=subjects_dir,
-                            src_tag="vol-7",
-                        )
-                                       
+                        stc_vec_anim = ndvar_merged_to_stc_lr(ndvar=anim, fwd=fwd, subject=subject,
+                                                              subjects_dir=subjects_dir,src_tag="vol-7")
+                        stc_vec_inanim = ndvar_merged_to_stc_lr(ndvar=inanim,fwd=fwd, subject=subject,
+                                                                subjects_dir=subjects_dir, src_tag="vol-7")     
+                        _,_,anim_fs = morph_hemi(stc_vec_anim, subject=subject, subject_to="fsaverage2",
+                                             subjects_dir=subjects_dir, src_tag="vol-7")
+                        _,_,inanim_fs = morph_hemi(stc_vec_inanim, subject=subject, subject_to="fsaverage2",
+                                               subjects_dir=subjects_dir, src_tag="vol-7")   
+                        # Smoothing
                         anim= anim_fs.smooth('source', 0.01, 'gaussian')
                         inanim= inanim_fs.smooth('source', 0.01, 'gaussian')
                         save.pickle((inanim, anim), morphed_file)   
@@ -209,10 +281,22 @@ for mod in ["dummy", "effect"]:
 # %%
 trials_per_subset = 200
 dirs = {
-    "NCRF-DC": "models/samesize/dc",
-    "MNE": "models/samesize/MNE",
-    "NCRF-EC": "models/samesize/effect",
+    "NCRF-DC": "models/samesize/1session/dummy",
+   # "MNE": "models/samesize/1session/MNE",
+    "NCRF-EC": "models/samesize/1session/effect",
+    "MNE": "models/samesize/2sesmne", #uncomment if "2sesmne" ...
 }
+
+
+def load_model_subset(model_dir, m, subject, size):
+   
+   
+    file_path = f"{model_dir}/M{m}-{size}-{subject}.pickle"
+    if "2sesmne" in model_dir.lower() or "mne" in model_dir.lower(): file_path = f"{model_dir}/{m}-{size}-{subject}.pickle" #for 2sesmne
+    inan, anim = load.unpickle(file_path)
+    
+    return inan, anim
+
 
 def compute_results(method_name, model_dir):
     print(f"Processing {method_name} results...")
@@ -234,8 +318,10 @@ def compute_results(method_name, model_dir):
 
                 if method_name == "NCRF-EC":
                     d1, d2 = anim1, anim2  # contrast saved in anim
+                    
                 else:
                     d1, d2 = anim1 - inan1, anim2 - inan2
+                    
 
                 cases.append([subject, "M1", "contrast", d1])
                 cases.append([subject, "M2", "contrast", d2])
@@ -360,9 +446,7 @@ print(f"NCRF-DC:\n{results_ncrf_dc["contrast"]}")
 print(f"NCRF-EC:\n{results_ncrf_ec["contrast"]}") 
 
 # %%
-print(f"NCRF-DC:\n{results_ncrf_dc["raw"]}") 
-
-# %%
+#print(f"NCRF-DC:\n{results_ncrf_dc["raw"]}") 
 #df = results_ncrf_dc["raw"].query('kind == "contrast"')[["subject", "Subset Size", "r"]]
 #print(df.to_string(index=False))
 
@@ -371,79 +455,6 @@ print(f"NCRF-DC:\n{results_ncrf_dc["raw"]}")
 
 # %% [markdown]
 # ## Trial Size plots 
-
-# %%
-raw_all = pd.concat([
-    results_mne["raw"],
-    results_ncrf_dc["raw"],
-    results_ncrf_ec["raw"],
-    
-    
-    
-], ignore_index=True)
-
-df_contrast = raw_all.query('kind == "contrast"').copy()
-df_contrast["Subset Size"] = pd.Categorical(
-    df_contrast["Subset Size"],
-    categories=sorted(df_contrast["Subset Size"].unique()),
-    ordered=True
-)
-
-sns.set_theme(style="whitegrid")
-plt.figure(figsize=(10, 5))
-ax = sns.violinplot(
-    data=df_contrast,
-    x="Subset Size",
-    y="r",
-    hue="method",      # remove this line if you want one method at a time
-    inner="box",
-    cut=0
-)
-ax.set_xlabel("Trial size (trials)")
-ax.set_ylabel("Pearson r (M1 vs M2)")
-ax.set_ylim(-0.3, 1)
-plt.legend(title="Method", bbox_to_anchor=(1.02, 1), loc="upper left")
-plt.tight_layout()
-plt.show()
-
-# %%
-raw_all = pd.concat([
-    
-    results_ncrf_ec["raw"],
-    results_ncrf_dc["raw"],
-], ignore_index=True)
-
-df_contrast = raw_all.query('kind == "contrast" and method in ["NCRF-DC", "NCRF-EC"]').copy()
-
-df_contrast["Subset Size"] = pd.Categorical(
-    df_contrast["Subset Size"],
-    categories=sorted(df_contrast["Subset Size"].unique()),
-    ordered=True
-)
-
-sns.set_theme(style="whitegrid")
-plt.figure(figsize=(10, 5))
-ax = sns.violinplot(
-    data=df_contrast,
-    x="Subset Size",
-    y="r",
-    hue="method",
-    split=True,     # left/right halves
-    inner="quartile",
-    cut=0
-)
-
-ax.set_xlabel("Trial size (trials)")
-ax.set_ylabel("Pearson r (M1 vs M2)")
-ax.set_ylim(-0.2, 1)
-
-
-
-ax.legend(title="Method", bbox_to_anchor=(1.02, 1), loc="upper left")
-
-plt.tight_layout()
-plt.show()
-
 
 # %%
 df_dc = results_ncrf_dc["avg"].copy()
@@ -514,7 +525,7 @@ plt.legend(title="", loc="upper left", frameon=False)
 plt.tight_layout()
 plt.show()
 
-# %%
+
 #PLT T-MAP and T2-map
 df_dc = results_ncrf_dc["tmap"].copy()
 df_dc["Method"] = "NCRF-DC"
@@ -581,9 +592,403 @@ plt.legend(title="", loc="upper left", frameon=False)
 plt.tight_layout()
 plt.show()
 
+# %%
+raw_all = pd.concat([
+    results_ncrf_ec["raw"],
+    results_ncrf_dc["raw"],
+    
+    results_mne["raw"],
+    
+    
+    
+], ignore_index=True)
+
+df_contrast = raw_all.query('kind == "contrast"').copy()
+df_contrast["Subset Size"] = pd.Categorical(
+    df_contrast["Subset Size"],
+    categories=sorted(df_contrast["Subset Size"].unique()),
+    ordered=True
+)
+
+sns.set_theme(style="whitegrid")
+plt.figure(figsize=(10, 5))
+ax = sns.violinplot(
+    data=df_contrast,
+    x="Subset Size",
+    y="r",
+    hue="method",      # remove this line if you want one method at a time
+    inner="box",
+    cut=0
+)
+ax.set_xlabel("Trial size (trials)")
+ax.set_ylabel("Pearson r (M1 vs M2)")
+ax.set_ylim(-0.3, 1)
+plt.legend(title="Method", bbox_to_anchor=(1.02, 1), loc="upper left")
+plt.tight_layout()
+plt.show()
+
+
+
+raw_all = pd.concat([
+    
+    results_ncrf_ec["raw"],
+    results_ncrf_dc["raw"],
+], ignore_index=True)
+
+df_contrast = raw_all.query('kind == "contrast" and method in ["NCRF-DC", "NCRF-EC"]').copy()
+
+df_contrast["Subset Size"] = pd.Categorical(
+    df_contrast["Subset Size"],
+    categories=sorted(df_contrast["Subset Size"].unique()),
+    ordered=True
+)
+
+sns.set_theme(style="whitegrid")
+plt.figure(figsize=(10, 5))
+ax = sns.violinplot(
+    data=df_contrast,
+    x="Subset Size",
+    y="r",
+    hue="method",
+    split=True,     # left/right halves
+    inner="quartile",
+    cut=0
+)
+
+ax.set_xlabel("Trial size (trials)")
+ax.set_ylabel("Pearson r (M1 vs M2)")
+ax.set_ylim(-0.2, 1)
+
+
+
+ax.legend(title="Method", bbox_to_anchor=(1.02, 1), loc="upper left")
+
+plt.tight_layout()
+plt.show()
+
+# %% [markdown]
+# ## plot for individuals
 
 # %%
 
+
+def plot_raw_contrast_subject(subject, results_by_method, out_dir=None):
+    
+    frames = []
+    for method, res in results_by_method.items():
+        df = res["raw"].query('subject == @subject and kind == "contrast"')[["Subset Size", "r"]].copy()
+        df["method"] = method
+        frames.append(df)
+
+    df_all = pd.concat(frames, ignore_index=True)
+    if df_all.empty:
+        raise ValueError(f"No raw contrast rows found for {subject}")
+
+    df_all["Subset Size"] = pd.Categorical(
+        df_all["Subset Size"],
+        categories=sorted(df_all["Subset Size"].unique()),
+        ordered=True
+    )
+
+    sns.set_theme(style="whitegrid")
+    plt.figure(figsize=(8, 4.5))
+    ax = sns.lineplot(data=df_all, x="Subset Size", y="r", hue="method", marker="o")
+    ax.set_title(f"Within-subject Contrast Correlations ({subject})")
+    ax.set_xlabel("Number of Trials")
+    ax.set_ylabel("Pearson r")
+    ax.set_ylim(-0.2, 0.8)
+    ax.legend(title="Method", loc="upper left")
+    plt.tight_layout()
+
+    if out_dir is not None:
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_pdf = out_dir / f"{subject}_raw_contrast_r.pdf"
+        plt.savefig(out_pdf, bbox_inches="tight")
+        plt.close()
+        return str(out_pdf)
+
+    
+#----------------------------------
+
+results_map = {
+    "NCRF-DC": results_ncrf_dc,
+    "MNE": results_mne,
+    "NCRF-EC": results_ncrf_ec,
+}
+
+
+for i in range(1, 31):
+    subject = f"sub-{i:02d}"
+    
+    try:
+        pdf_path = plot_raw_contrast_subject(subject, results_map, out_dir="figures/trial_size")
+        print(f"Saved: {pdf_path}")
+    except Exception as e:
+        print(f"Skipping {subject}: {e}")
+
+
 # %%
+import numpy as np
+import pandas as pd
+from scipy.spatial import distance
+
+
+trials_per_subset = 200
+dirs = {
+    "NCRF-DC": "models/samesize/1session/dummy",
+     "MNE": "models/samesize/1session/MNE",
+    "NCRF-EC": "models/samesize/1session/effect",
+   # "MNE": "models/samesize/2sesmne",  # uncomment if "2sesmne" ...
+}
+
+
+def distance_to_similarity(distances):
+    return 1 / (1 + np.array(distances, dtype=float))
+
+
+def load_model_subset(model_dir, m, subject, size):
+    file_path = f"{model_dir}/M{m}-{size}-{subject}.pickle"
+   # if "2sesmne" in model_dir.lower() or "mne" in model_dir.lower():
+    #    file_path = f"{model_dir}/{m}-{size}-{subject}.pickle"   # for 2sesmne
+    inan, anim = load.unpickle(file_path)
+    return inan, anim
+
+
+def compute_results(method_name, model_dir):
+    print(f"Processing {method_name} results...")
+    summary_avg = []
+    contrast_results, condition_results, summary_tmaps = [], [], []
+    rows_raw = []
+
+    for size in sizes:
+        cases = []
+        contrast_rs, anim_rs, inan_rs = [], [], []
+        contrast_cityblocks = []
+
+        subset_n_trials = int(size * trials_per_subset)
+
+        for i in range(1, 31):
+            subject = f"sub-{i:02d}"
+            try:
+                inan1, anim1 = load_model_subset(model_dir, 1, subject, size)
+                inan2, anim2 = load_model_subset(model_dir, 2, subject, size)
+
+                if method_name == "NCRF-EC":
+                    d1, d2 = anim1, anim2   # contrast saved in anim
+                else:
+                    d1, d2 = anim1 - inan1, anim2 - inan2
+
+                cases.append([subject, "M1", "contrast", d1])
+                cases.append([subject, "M2", "contrast", d2])
+
+                i1 = inan1.get_data().ravel()
+                i2 = inan2.get_data().ravel()
+                a1 = anim1.get_data().ravel()
+                a2 = anim2.get_data().ravel()
+                d1_flat = d1.get_data().ravel()
+                d2_flat = d2.get_data().ravel()
+
+                if method_name != "NCRF-EC":
+                    if np.std(a1) == 0 or np.std(a2) == 0:
+                        r_anim = np.nan
+                    else:
+                        r_anim = np.corrcoef(a1, a2)[0, 1]
+
+                    if np.std(i1) == 0 or np.std(i2) == 0:
+                        r_inan = np.nan
+                    else:
+                        r_inan = np.corrcoef(i1, i2)[0, 1]
+
+                    anim_rs.append(r_anim)
+                    inan_rs.append(r_inan)
+
+                    rows_raw.append({
+                        "method": method_name,
+                        "subject": subject,
+                        "Subset Size": subset_n_trials,
+                        "kind": "anim",
+                        "r": r_anim
+                    })
+                    rows_raw.append({
+                        "method": method_name,
+                        "subject": subject,
+                        "Subset Size": subset_n_trials,
+                        "kind": "inan",
+                        "r": r_inan
+                    })
+
+                # Contrast Pearson r
+                if (
+                    np.std(d1_flat) == 0
+                    or np.std(d2_flat) == 0
+                    or np.any(np.isnan(d1_flat))
+                    or np.any(np.isnan(d2_flat))
+                ):
+                    r_contrast = np.nan
+                else:
+                    r_contrast = np.corrcoef(d1_flat, d2_flat)[0, 1]
+
+                contrast_rs.append(r_contrast)
+
+                # Contrast cityblock distance and similarity
+                if np.any(np.isnan(d1_flat)) or np.any(np.isnan(d2_flat)):
+                    cityblock_dist = np.nan
+                    cityblock_sim = np.nan
+                else:
+                    cityblock_dist = distance.cityblock(d1_flat, d2_flat)
+                    cityblock_sim = float(distance_to_similarity(cityblock_dist))
+
+                contrast_cityblocks.append(cityblock_dist)
+
+                # per-subject similarities for contrast
+                rows_raw.append({
+                    "method": method_name,
+                    "subject": subject,
+                    "Subset Size": subset_n_trials,
+                    "kind": "contrast",
+                    "r": r_contrast,
+                    "cityblock_dist": cityblock_dist,
+                    "cityblock_similarity": cityblock_sim
+                })
+
+            except Exception as e:
+                print(f"Skipping {subject} at size {size}: {e}")
+                continue
+
+        # Averaged model
+        if cases:
+            data = Dataset.from_caselist(["subject", "model", "animacy", "ncrf"], cases)
+            data_avg = data.aggregate("model", drop_bad=True)
+            m1 = data_avg["ncrf"][data_avg["model"] == "M1"][0].get_data().ravel()
+            m2 = data_avg["ncrf"][data_avg["model"] == "M2"][0].get_data().ravel()
+            r_avg = np.corrcoef(m1, m2)[0, 1]
+
+            if np.any(np.isnan(m1)) or np.any(np.isnan(m2)):
+                cityblock_dist_avg = np.nan
+                cityblock_sim_avg = np.nan
+            else:
+                cityblock_dist_avg = distance.cityblock(m1, m2)
+                cityblock_sim_avg = float(distance_to_similarity(cityblock_dist_avg))
+
+            summary_avg.append({
+                "Subset Size": subset_n_trials,
+                "pearson_r": r_avg,
+                "cityblock_dist": cityblock_dist_avg,
+                "cityblock_similarity": cityblock_sim_avg
+            })
+
+        # within-subject summaries
+        if contrast_rs:
+            mean_cityblock_dist = np.nanmean(contrast_cityblocks) if len(contrast_cityblocks) > 0 else np.nan
+
+            mean_cityblock_similarity = float(distance_to_similarity(mean_cityblock_dist)) if not np.isnan(mean_cityblock_dist) else np.nan
+
+            contrast_results.append({
+                "Subset Size": subset_n_trials,
+                "Mean Pearson r": np.nanmean(contrast_rs),
+                "Mean Cityblock Dist": mean_cityblock_dist,
+                "Mean Cityblock Similarity": mean_cityblock_similarity,
+                "N Subjects": int(np.sum(~np.isnan(contrast_rs)))
+            })
+
+        if method_name != "NCRF-EC":
+            if anim_rs and inan_rs:
+                condition_results.append({
+                    "Subset Size": subset_n_trials,
+                    "Anim": np.nanmean(anim_rs),
+                    "Inan": np.nanmean(inan_rs),
+                    "N Subjects": int(np.sum(~np.isnan(anim_rs)))
+                })
+
+        # t-map, T2-map
+        if cases:
+            data["ncrf_norm"] = [nd.norm("space") for nd in data["ncrf"]]
+            res_m1 = testnd.TTestOneSample(data.sub('model =="M1"')["ncrf_norm"], samples=0)
+            res_m2 = testnd.TTestOneSample(data.sub('model == "M2"')["ncrf_norm"], samples=0)
+            r_tmaps = np.corrcoef(res_m1.t.x.ravel(), res_m2.t.x.ravel())[0, 1]
+
+            res_m1_t2 = testnd.Vector(data.sub('model =="M1"')["ncrf"], samples=0)
+            res_m2_t2 = testnd.Vector(data.sub('model == "M2"')["ncrf"], samples=0)
+            r_t2 = np.corrcoef(res_m1_t2.t2.x.ravel(), res_m2_t2.t2.x.ravel())[0, 1]
+
+            summary_tmaps.append({
+                "Subset Size": subset_n_trials,
+                "Tmap_Corr": r_tmaps,
+                "T2map_Corr": r_t2
+            })
+
+    results = {
+        "avg": pd.DataFrame(summary_avg),
+        "contrast": pd.DataFrame(contrast_results),
+        "condition": pd.DataFrame(condition_results) if method_name != "NCRF-EC" else None,
+        "tmap": pd.DataFrame(summary_tmaps),
+        "raw": pd.DataFrame(rows_raw),
+    }
+    return results
+
+
+results_ncrf_dc = compute_results("NCRF-DC", dirs["NCRF-DC"])
+results_mne = compute_results("MNE", dirs["MNE"])
+results_ncrf_ec = compute_results("NCRF-EC", dirs["NCRF-EC"])
+
+pd.set_option("display.float_format", lambda x: f"{x:.12f}")
+
+
+
+print(f"MNE:\n{results_mne['contrast']}")
+print(f"NCRF-DC:\n{results_ncrf_dc['contrast']}")
+print(f"NCRF-EC:\n{results_ncrf_ec['contrast']}")
+
+# %%
+plt.figure(figsize=(9, 5))
+
+y_dc = results_ncrf_dc["contrast"]["Mean Cityblock Similarity"]
+y_mne = results_mne["contrast"]["Mean Cityblock Similarity"]
+y_ec = results_ncrf_ec["contrast"]["Mean Cityblock Similarity"]
+
+plt.plot(
+    results_ncrf_dc["contrast"]["Subset Size"],
+    y_dc,
+    marker='o',
+    linewidth=2.5,
+    markersize=8,
+    label="NCRF-DC"
+)
+
+plt.plot(
+    results_mne["contrast"]["Subset Size"],
+    y_mne,
+    marker='o',
+    linewidth=2.5,
+    markersize=8,
+    label="MNE"
+)
+
+plt.plot(
+    results_ncrf_ec["contrast"]["Subset Size"],
+    y_ec,
+    marker='o',
+    linewidth=2.5,
+    markersize=8,
+    label="NCRF-EC"
+)
+
+all_y = np.concatenate([y_dc.values, y_mne.values, y_ec.values])
+ymin = np.nanmin(all_y)
+ymax = np.nanmax(all_y)
+pad = (ymax - ymin) * 0.15 if ymax > ymin else 1e-8
+
+plt.title("Within-subject Contrast ", fontsize=18)
+plt.xlabel("Number of Trials", fontsize=16)
+plt.ylabel("Mean Cityblock Similarity", fontsize=16)
+plt.xticks([50, 100, 200, 400], fontsize=13)
+plt.yticks(fontsize=13)
+plt.ylim(ymin - pad, ymax + pad)
+plt.ticklabel_format(style='plain', axis='y', useOffset=False)
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.legend(fontsize=14)
+plt.tight_layout()
+plt.show()
 
 # %%
