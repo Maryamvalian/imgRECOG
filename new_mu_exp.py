@@ -1058,3 +1058,394 @@ plt.show()
 a_norm_flat
 
 # %%
+#R ,CITY BLOCK < CHEBYSHEV , JACCARD
+
+sizes = [0.25, 0.5, 1, 2.0, 4.0]
+subjects = [f"sub-{i:02d}" for i in range(10, 31)]
+mods = ["dummy", "effect"]
+
+def distance_to_similarity(distances):
+    return 1 / (1 + np.array(distances, dtype=float))
+
+results = {}
+
+for mod in mods:
+    mean_rs = []
+    mean_cityblocks = []
+    mean_chebyshevs = []
+    mean_jaccards = []
+
+    all_rs = {}
+    all_cityblocks = {}
+    all_chebyshevs = {}
+    all_jaccards = {}
+
+    for size in sizes:
+        if size == 1:   # Auto mu
+            model_dir = f"models/samesize/{'dc' if mod == 'dummy' else 'effect'}"
+            file_size = 2   # in this folder, size 2 means 400 trials
+        else:
+            model_dir = f"models/newmu/{mod}"
+            file_size = size
+
+        subj_rs = []
+        subj_cityblocks = []
+        subj_chebyshevs = []
+        subj_jaccards = []
+
+        for subject in subjects:
+            try:
+                inan1, anim1 = load.unpickle(f"{model_dir}/M1-{file_size}-{subject}.pickle")
+                inan2, anim2 = load.unpickle(f"{model_dir}/M2-{file_size}-{subject}.pickle")
+
+                if mod == "dummy":
+                    d1 = anim1 - inan1
+                    d2 = anim2 - inan2
+                else:
+                    d1 = inan1 if size == 1 else anim1
+                    d2 = inan2 if size == 1 else anim2
+
+                d1_flat = d1.get_data().ravel()
+                d2_flat = d2.get_data().ravel()
+
+                r_contrast = np.corrcoef(d1_flat, d2_flat)[0, 1]
+                cityblock_dist = distance.cityblock(d1_flat, d2_flat)
+                chebyshev_dist = distance.chebyshev(d1_flat, d2_flat)
+
+                if not np.isnan(r_contrast):
+                    subj_rs.append(r_contrast)
+
+                if not np.isnan(cityblock_dist):
+                    subj_cityblocks.append(cityblock_dist)
+
+                if not np.isnan(chebyshev_dist):
+                    subj_chebyshevs.append(chebyshev_dist)
+
+                # Jaccard 
+                A = np.asarray(d1.get_data(), dtype=float)   
+                B = np.asarray(d2.get_data(), dtype=float)
+                a_norm = np.linalg.norm(A, axis=1)   # (source, time)
+                b_norm = np.linalg.norm(B, axis=1)
+                a_norm_flat = a_norm.ravel()          
+                b_norm_flat = b_norm.ravel()
+
+                thr_a = np.percentile(a_norm_flat, 70)   # 70% below threshold
+                thr_b = np.percentile(b_norm_flat, 70)
+
+                A_active = a_norm_flat > thr_a
+                B_active = b_norm_flat > thr_b
+
+                jaccard = 1 - distance.jaccard(A_active, B_active)
+
+                if not np.isnan(jaccard):
+                    subj_jaccards.append(jaccard)
+
+            except Exception as e:
+                print(f"Error for mod={mod}, subject={subject}, size={size}: {e}")
+
+        all_rs[size] = subj_rs
+        all_cityblocks[size] = subj_cityblocks
+        all_chebyshevs[size] = subj_chebyshevs
+        all_jaccards[size] = subj_jaccards
+
+        mean_rs.append(np.mean(subj_rs) if len(subj_rs) > 0 else np.nan)
+        mean_cityblocks.append(np.mean(subj_cityblocks) if len(subj_cityblocks) > 0 else np.nan)
+        mean_chebyshevs.append(np.mean(subj_chebyshevs) if len(subj_chebyshevs) > 0 else np.nan)
+        mean_jaccards.append(np.mean(subj_jaccards) if len(subj_jaccards) > 0 else np.nan)
+
+    results[mod] = {
+        "mean_rs": mean_rs,
+        "mean_cityblocks": mean_cityblocks,
+        "mean_chebyshevs": mean_chebyshevs,
+        "mean_jaccards": mean_jaccards,
+        "cityblock_similarity": distance_to_similarity(mean_cityblocks),
+        "chebyshev_similarity": distance_to_similarity(mean_chebyshevs),
+        "all_rs": all_rs,
+        "all_cityblocks": all_cityblocks,
+        "all_chebyshevs": all_chebyshevs,
+        "all_jaccards": all_jaccards,
+    }
+
+plt.figure(figsize=(7, 5))
+for mod in mods:
+    marker = '^' if mod == "dummy" else 'o'
+    plt.plot(sizes, results[mod]["mean_rs"], marker=marker, label=mod)
+
+plt.xticks(sizes)
+plt.xlabel("Mu Factor (Mu Factor = 1 means auto mu)")
+plt.ylabel(" Pearson r (Avg)")
+plt.title("EC vs DC")
+plt.grid(True)
+plt.legend()
+plt.show()
+
+
+plt.figure(figsize=(7, 5))
+for mod in mods:
+    marker = '^' if mod == "dummy" else 'o'
+    plt.plot(sizes, results[mod]["cityblock_similarity"], marker=marker, label=mod)
+
+plt.xticks(sizes)
+plt.xlabel("Mu Factor (Mu Factor = 1 means auto mu)")
+plt.ylabel(" Cityblock Similarity (avg)")
+plt.title("EC vs DC")
+plt.grid(True)
+plt.legend()
+plt.show()
+
+
+plt.figure(figsize=(7, 5))
+for mod in mods:
+    marker = '^' if mod == "dummy" else 'o'
+    plt.plot(sizes, results[mod]["chebyshev_similarity"], marker=marker, label=mod)
+
+plt.xticks(sizes)
+plt.xlabel("Mu Factor (Mu Factor = 1 means auto mu)")
+plt.ylabel(" Chebyshev Similarity (Avg)")
+plt.title("EC vs DC")
+plt.grid(True)
+plt.legend()
+plt.show()
+
+
+plt.figure(figsize=(7, 5))
+for mod in mods:
+    marker = '^' if mod == "dummy" else 'o'
+    plt.plot(sizes, results[mod]["mean_jaccards"], marker=marker, label=mod)
+
+plt.xticks(sizes)
+plt.xlabel("Mu Factor ")
+plt.ylabel(" Jaccard Similarity (Avg)")
+plt.title("EC vs DC")
+plt.grid(True)
+plt.legend()
+plt.show()
+
+# %%
+plt.figure(figsize=(7, 5))
+plt.plot(sizes, results["dummy"]["mean_jaccards"], marker='^', label="ncrf_dc")
+
+plt.xticks(sizes)
+plt.xlabel("Mu Factor (Mu Factor = 1 means auto mu)")
+plt.ylabel("Average Jaccard Similarity")
+plt.title("NCRF DC")
+plt.grid(True)
+plt.legend()
+plt.show()
+
+# %% [markdown]
+# # cosine
+
+# %%
+A = np.asarray(d1.get_data(), dtype=float)   # (V, 3, T)
+B = np.asarray(d2.get_data(), dtype=float)
+V, _, T = A.shape
+cos_sim = np.full((V, T), np.nan)
+
+for v in range(V):
+    for t in range(T):
+        a = A[v, :, t]
+        b = B[v, :, t]
+
+        if np.all(a == 0) or np.all(b == 0):
+            continue
+
+        cos_sim[v, t] = 1 - distance.cosine(a, b)
+mean_cos = np.nanmean(cos_sim) 
+mean_cos
+
+# %%
+
+
+results = {}
+
+for mod in mods:
+    mean_rs = []
+    mean_cityblocks = []
+    mean_chebyshevs = []
+    mean_jaccards = []
+    mean_cosines = []
+
+    all_rs = {}
+    all_cityblocks = {}
+    all_chebyshevs = {}
+    all_jaccards = {}
+    all_cosines = {}
+
+    for size in sizes:
+        if size == 1:   # Auto mu
+            model_dir = f"models/samesize/{'dc' if mod == 'dummy' else 'effect'}"
+            file_size = 2   # in this folder, size 2 means 400 trials
+        else:
+            model_dir = f"models/newmu/{mod}"
+            file_size = size
+
+        subj_rs = []
+        subj_cityblocks = []
+        subj_chebyshevs = []
+        subj_jaccards = []
+        subj_cosines = []
+
+        for subject in subjects:
+            try:
+                inan1, anim1 = load.unpickle(f"{model_dir}/M1-{file_size}-{subject}.pickle")
+                inan2, anim2 = load.unpickle(f"{model_dir}/M2-{file_size}-{subject}.pickle")
+
+                if mod == "dummy":
+                    d1 = anim1 - inan1
+                    d2 = anim2 - inan2
+                else:
+                    d1 = inan1 if size == 1 else anim1
+                    d2 = inan2 if size == 1 else anim2
+
+                d1_flat = d1.get_data().ravel()
+                d2_flat = d2.get_data().ravel()
+
+                r_contrast = np.corrcoef(d1_flat, d2_flat)[0, 1]
+                cityblock_dist = distance.cityblock(d1_flat, d2_flat)
+                chebyshev_dist = distance.chebyshev(d1_flat, d2_flat)
+
+                if not np.isnan(r_contrast):
+                    subj_rs.append(r_contrast)
+
+                if not np.isnan(cityblock_dist):
+                    subj_cityblocks.append(cityblock_dist)
+
+                if not np.isnan(chebyshev_dist):
+                    subj_chebyshevs.append(chebyshev_dist)
+
+                # Jaccard
+                A = np.asarray(d1.get_data(), dtype=float)   # (V, 3, T)
+                B = np.asarray(d2.get_data(), dtype=float)
+
+                a_norm = np.linalg.norm(A, axis=1)   # (source, time)
+                b_norm = np.linalg.norm(B, axis=1)
+                a_norm_flat = a_norm.ravel()
+                b_norm_flat = b_norm.ravel()
+
+                thr_a = np.percentile(a_norm_flat, 70)
+                thr_b = np.percentile(b_norm_flat, 70)
+
+                A_active = a_norm_flat > thr_a
+                B_active = b_norm_flat > thr_b
+
+                jaccard = 1 - distance.jaccard(A_active, B_active)
+
+                if not np.isnan(jaccard):
+                    subj_jaccards.append(jaccard)
+
+                # Cosine similarity
+                V, _, T = A.shape
+                cos_sim = np.full((V, T), np.nan)
+
+                for v in range(V):
+                    for t in range(T):
+                        a = A[v, :, t]
+                        b = B[v, :, t]
+
+                        if np.all(a == 0) or np.all(b == 0):
+                            continue
+
+                        cos_sim[v, t] = 1 - distance.cosine(a, b)
+
+                mean_cos = np.nanmean(cos_sim)
+
+                if not np.isnan(mean_cos):
+                    subj_cosines.append(mean_cos)
+
+            except Exception as e:
+                print(f"Error for mod={mod}, subject={subject}, size={size}: {e}")
+
+        all_rs[size] = subj_rs
+        all_cityblocks[size] = subj_cityblocks
+        all_chebyshevs[size] = subj_chebyshevs
+        all_jaccards[size] = subj_jaccards
+        all_cosines[size] = subj_cosines
+
+        mean_rs.append(np.mean(subj_rs) if len(subj_rs) > 0 else np.nan)
+        mean_cityblocks.append(np.mean(subj_cityblocks) if len(subj_cityblocks) > 0 else np.nan)
+        mean_chebyshevs.append(np.mean(subj_chebyshevs) if len(subj_chebyshevs) > 0 else np.nan)
+        mean_jaccards.append(np.mean(subj_jaccards) if len(subj_jaccards) > 0 else np.nan)
+        mean_cosines.append(np.mean(subj_cosines) if len(subj_cosines) > 0 else np.nan)
+
+    results[mod] = {
+        "mean_rs": mean_rs,
+        "mean_cityblocks": mean_cityblocks,
+        "mean_chebyshevs": mean_chebyshevs,
+        "mean_jaccards": mean_jaccards,
+        "mean_cosines": mean_cosines,
+        "cityblock_similarity": distance_to_similarity(mean_cityblocks),
+        "chebyshev_similarity": distance_to_similarity(mean_chebyshevs),
+        "all_rs": all_rs,
+        "all_cityblocks": all_cityblocks,
+        "all_chebyshevs": all_chebyshevs,
+        "all_jaccards": all_jaccards,
+        "all_cosines": all_cosines,
+    }
+
+plt.figure(figsize=(7, 5))
+for mod in mods:
+    marker = '^' if mod == "dummy" else 'o'
+    plt.plot(sizes, results[mod]["mean_rs"], marker=marker, label=mod)
+
+plt.xticks(sizes)
+plt.xlabel("Mu Factor (Mu Factor = 1 means auto mu)")
+plt.ylabel("Pearson r (Avg)")
+plt.title("EC vs DC")
+plt.grid(True)
+plt.legend()
+plt.show()
+
+plt.figure(figsize=(7, 5))
+for mod in mods:
+    marker = '^' if mod == "dummy" else 'o'
+    plt.plot(sizes, results[mod]["cityblock_similarity"], marker=marker, label=mod)
+
+plt.xticks(sizes)
+plt.xlabel("Mu Factor (Mu Factor = 1 means auto mu)")
+plt.ylabel("Cityblock Similarity (Avg)")
+plt.title("EC vs DC")
+plt.grid(True)
+plt.legend()
+plt.show()
+
+plt.figure(figsize=(7, 5))
+for mod in mods:
+    marker = '^' if mod == "dummy" else 'o'
+    plt.plot(sizes, results[mod]["chebyshev_similarity"], marker=marker, label=mod)
+
+plt.xticks(sizes)
+plt.xlabel("Mu Factor (Mu Factor = 1 means auto mu)")
+plt.ylabel("Chebyshev Similarity (Avg)")
+plt.title("EC vs DC")
+plt.grid(True)
+plt.legend()
+plt.show()
+
+plt.figure(figsize=(7, 5))
+for mod in mods:
+    marker = '^' if mod == "dummy" else 'o'
+    plt.plot(sizes, results[mod]["mean_jaccards"], marker=marker, label=mod)
+
+plt.xticks(sizes)
+plt.xlabel("Mu Factor")
+plt.ylabel("Jaccard Similarity (Avg)")
+plt.title("EC vs DC")
+plt.grid(True)
+plt.legend()
+plt.show()
+
+plt.figure(figsize=(7, 5))
+for mod in mods:
+    marker = '^' if mod == "dummy" else 'o'
+    plt.plot(sizes, results[mod]["mean_cosines"], marker=marker, label=mod)
+
+plt.xticks(sizes)
+plt.xlabel("Mu Factor")
+plt.ylabel("Cosine Similarity (Avg)")
+plt.title("EC vs DC")
+plt.grid(True)
+plt.legend()
+plt.show()
+
+# %%
