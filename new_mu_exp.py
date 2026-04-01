@@ -801,7 +801,7 @@ for mod in mods:
 plt.xticks(sizes)
 plt.xlabel("Mu Factor (Mu Factor = 1 means auto mu)")
 plt.ylabel("Average Pearson r")
-plt.title("Average M1, M2 Pearson ")
+plt.title("EC vs DC ")
 plt.grid(True)
 plt.legend()
 plt.show()
@@ -815,7 +815,7 @@ for mod in mods:
 plt.xticks(sizes)
 plt.xlabel("Mu Factor (Mu Factor = 1 means auto mu)")
 plt.ylabel("Average Cityblock Similarity")
-plt.title("NCRF_EC ")
+plt.title("EC vs DC ")
 plt.grid(True)
 plt.legend()
 plt.show()
@@ -829,21 +829,12 @@ for mod in mods:
 plt.xticks(sizes)
 plt.xlabel("Mu Factor (Mu Factor = 1 means auto mu)")
 plt.ylabel("Average Chebyshev Similarity")
-plt.title(" NCRF-EC")
+plt.title("EC vs DC")
 plt.grid(True)
 plt.legend()
 plt.show()
 
 # %%
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.spatial import distance
-
-sizes = [0.25, 0.5, 1, 2.0, 4.0]
-subjects = [f"sub-{i:02d}" for i in range(10, 31)]
-
-def distance_to_similarity(distances):
-    return 1 / (1 + np.array(distances, dtype=float))
 
 mean_rs = []
 mean_cityblocks = []
@@ -932,5 +923,138 @@ plt.ylabel("Average Chebyshev Similarity")
 plt.title(" avg Pearson r (Effect)")
 plt.grid(True)
 plt.show()
+
+# %%
+d1
+
+# %%
+d2
+
+
+# %%
+A = d1.get_data()
+B= d2.get_data()
+A.shape, B.shape
+
+
+# %%
+A[:,:,0]
+
+# %%
+B[:,:,0]
+
+# %%
+t = 0
+a_norm = np.linalg.norm(A[:, :, t], axis=1)
+b_norm = np.linalg.norm(B[:, :, t], axis=1)
+
+print(a_norm[:5])
+print(b_norm[:5])
+
+# %%
+t = 0
+a_norm = np.linalg.norm(A[:, :, t], axis=1)
+b_norm = np.linalg.norm(B[:, :, t], axis=1)
+
+thr = 0.01 * max(a_norm.max(), b_norm.max())   # 1% of max norm (small number to keep most sources 
+
+A_active = a_norm > thr
+B_active = b_norm > thr
+
+print("thr =", thr)
+print("n active in A =", A_active.sum())
+print("n active in B =", B_active.sum())
+
+# %%
+inter = np.sum(A_active & B_active)
+union = np.sum(A_active | B_active)
+
+jaccard = inter / union if union > 0 else np.nan
+
+print("intersection =", inter)
+print("union =", union)
+print("jaccard =", jaccard)
+
+# %%
+thr_a = np.percentile(a_norm, 70)      #70% of sources below this thr - top 30% active
+thr_b = np.percentile(b_norm, 70)
+A_active = a_norm > thr_a
+B_active = b_norm > thr_b
+inter = np.sum(A_active & B_active)
+union = np.sum(A_active | B_active)
+
+jaccard = inter / union if union > 0 else np.nan
+
+print("intersection =", inter)
+print("union =", union)
+print("jaccard =", jaccard)
+
+# %%
+thr_a
+
+# %% [markdown]
+# # Jaccard
+#
+# <b>measuring support overlap </b>: <br>
+# 1.norm <br>
+# 2.binary active sources based on thr : A_active= [1 0 0 0] B_active=[ 1 1 0 0] <br>
+# 3. jaccard dissimilarity : (d01+d10) / (d11+d10+d01)  : similarity = 1-dissimilarity = d11/(d11+d10+d01)
+
+# %%
+mean_jaccards = []
+all_jaccards = {}
+
+for size in sizes:
+    if size == 1:   # Auto mu
+        model_dir = "models/samesize/effect"
+        file_size = 2   # in this folder, size 2 means 400 trials
+    else:
+        model_dir = "models/newmu/effect"
+        file_size = size
+
+    subj_jaccards = []
+
+    for subject in subjects:
+        try:
+            inan1, anim1 = load.unpickle(f"{model_dir}/M1-{file_size}-{subject}.pickle")
+            inan2, anim2 = load.unpickle(f"{model_dir}/M2-{file_size}-{subject}.pickle")
+            d1 = inan1 if size == 1 else anim1
+            d2 = inan2 if size == 1 else anim2
+            A = np.asarray(d1.get_data(), dtype=float)   
+            B = np.asarray(d2.get_data(), dtype=float)
+            
+            a_norm = np.linalg.norm(A, axis=1)                  #1751*71 : n_sources* time points
+            b_norm = np.linalg.norm(B, axis=1)                   
+            
+            a_norm_flat = a_norm.ravel()         #1D array of size : 124321 = 1751*71
+            b_norm_flat = b_norm.ravel()
+            
+            #JACCARD
+            thr_a = np.percentile(a_norm_flat, 70) #70% data under this thr
+            thr_b = np.percentile(b_norm_flat, 70)
+            A_active = a_norm_flat > thr_a
+            B_active = b_norm_flat > thr_b            
+            
+            jaccard=1-distance.jaccard(A_active,B_active)
+
+            if not np.isnan(jaccard):
+                subj_jaccards.append(jaccard)
+        except Exception as e:
+            print(f"Error for subject={subject}, size={size}: {e}")
+
+    all_jaccards[size] = subj_jaccards
+    mean_jaccards.append(np.mean(subj_jaccards) if len(subj_jaccards) > 0 else np.nan)
+
+plt.figure(figsize=(6, 4))
+plt.plot(sizes, mean_jaccards, marker='o')
+plt.xticks(sizes)
+plt.xlabel("Mu Factor ")
+plt.ylabel("Jaccard Similarity Avg")
+plt.title("(Effect)")
+plt.grid(True)
+plt.show()
+
+# %%
+a_norm_flat
 
 # %%
