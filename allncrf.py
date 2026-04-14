@@ -155,7 +155,7 @@ for i in range(1, 31):
         
     else:
         sessions=["ImageNet01", "ImageNet02","ImageNet03","ImageNet04"]
-        lastruns=[2,2,8,8]
+        lastruns=[2,2,8,8]   #runs
     
     subject = f"sub-{i:02d}"
     for idx, session in enumerate(sessions):
