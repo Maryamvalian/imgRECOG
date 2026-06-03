@@ -1736,10 +1736,10 @@ for label in visual_label_ids:
     diff = new_n - old_n
     print(f"{label:4d} | {old_n:3d} | {new_n:3d} | {diff:+d}")
 
+# %% [markdown]
+# # Plot unlabeled sources
+
 # %%
-
-
-
 src = d.source.get_source_space()
 
 #bad_label_ids = [0, 2, 41, 77]        #unlabeled, LH white, RH white, MRI artifact
@@ -1775,7 +1775,6 @@ fig = mne.viz.plot_bem(
 
 plt.show()
 
-# %%
 # create folder and save plot
 out_dir = "figures/bad"
 os.makedirs(out_dir, exist_ok=True)
@@ -1785,7 +1784,6 @@ out_file = os.path.join(out_dir, "unlabeled_sources_sagittal.pdf")
 fig.savefig(out_file, bbox_inches="tight")
 
 print("Saved:", out_file)
-
 
 # %% [markdown]
 # # Find sources  to add to left cuneus Based on MRI VOXELS
@@ -1827,18 +1825,6 @@ for src_idx, dist in zip(candidate_source_indices, candidate_distances):
 # %%
 #256^3=~16.8 million MRI voxelsvbut we have 1751 voxel in source
 print(atlas_data.shape)
-
-# %%
-# Make a copy so you don't overwrite the original labels accidentally
-source_labels_fixed = source_labels.copy()
-
-# Re-assign candidate unlabeled sources to left cuneus
-source_labels_fixed[candidate_source_indices] = target_label
-
-print("Reassigned sources:", len(candidate_source_indices))
-print("New number of sources with label 1005:",
-      np.sum(source_labels_fixed == target_label))
-
 
 # %%
 total_reassigned = 0
@@ -2410,7 +2396,7 @@ ROI_TITLES = {
 }
 
 
-
+#-------------------------------------------------------------
 def load_one_session_data():
     cases = []
     one_session_dir = "models/all_runs/morphed"
@@ -2492,8 +2478,6 @@ def plot_ROI(roi_name, error="sem", save=True):
 
     # Vector magnitude
     d_roi_norm = d_roi.norm("space")
-
-    # shape: source x time
     x = d_roi_norm.x
 
     mean_roi = np.nanmean(x, axis=0)
