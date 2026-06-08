@@ -67,7 +67,7 @@ def reassign_unlabeled_sources(
     atlas_labeled_vox = np.array(np.where(valid_atlas_mask)).T
     atlas_labeled_labels = atlas_data[valid_atlas_mask]
 
-    print("Atlas voxels used:", len(atlas_labeled_vox))
+    #print("Atlas voxels used:", len(atlas_labeled_vox))
 
     if len(atlas_labeled_vox) == 0:
         raise ValueError("No valid atlas voxels found.")
@@ -123,7 +123,7 @@ else:
     coords_mm = coords
 
 # %%
-threshold_mm = 2.0
+threshold_mm = 3.0
 
 atlas_file = os.path.join(
     subjects_dir,
@@ -167,7 +167,88 @@ source_labels_fixed = reassign_unlabeled_sources(
     atlas_data=atlas_data,
     atlas_affine=atlas.affine,
     threshold_mm=threshold_mm,
-    include_white_matter=True,
+    include_white_matter=True,            #can assigned labels to white matter
 )
+
+
+# %%
+def plot_unlabeled_sources_on_mri(
+    labels,
+    d,
+    subject,
+    subjects_dir,
+    out_file,
+    bad_label_ids=[0],
+    slices=[70, 80, 90, 100, 110],
+    orientation="sagittal",
+):
+    
+    src = d.source.get_source_space()
+
+    bad_mask = (
+        np.isnan(labels) |
+        np.isin(labels, bad_label_ids)
+    )
+
+    bad_src = copy.deepcopy(src)
+
+    all_used_vertices = src[0]["vertno"]
+
+    if len(bad_mask) != len(all_used_vertices):
+        raise ValueError(
+            f"Mask length {len(bad_mask)} does not match "
+            f"source vertices length {len(all_used_vertices)}"
+        )
+
+    bad_vertices = all_used_vertices[bad_mask]
+
+    bad_src[0]["vertno"] = bad_vertices
+    bad_src[0]["nuse"] = len(bad_vertices)
+
+    bad_src[0]["inuse"][:] = 0
+    bad_src[0]["inuse"][bad_vertices] = 1
+
+    print("Bad sources:", len(bad_vertices))
+    print("Saving to:", out_file)
+
+    fig = mne.viz.plot_bem(
+        subject=subject,
+        subjects_dir=subjects_dir,
+        brain_surfaces="white",
+        orientation=orientation,
+        slices=slices,
+        src=bad_src,
+    )
+
+    os.makedirs(os.path.dirname(out_file), exist_ok=True)
+    fig.savefig(out_file, bbox_inches="tight")
+
+    plt.show()
+
+    return fig
+
+
+# %%
+fig_before = plot_unlabeled_sources_on_mri(
+    labels=source_labels,
+    d=norm,
+    subject=subject,
+    subjects_dir=subjects_dir,
+    out_file="figures/bad/unlabeled_sources_before_fixing_sagittal.pdf",
+    bad_label_ids=[0],
+)
+
+fig_after = plot_unlabeled_sources_on_mri(
+    labels=source_labels_fixed,
+    d=norm,
+    subject=subject,
+    subjects_dir=subjects_dir,
+    out_file="figures/bad/unlabeled_sources_after_fixing_sagittal.pdf",
+    bad_label_ids=[0],
+)
+
+# %%
+
+# %%
 
 # %%
