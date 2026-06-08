@@ -30,20 +30,18 @@ import copy # for creating a copy of sources
 
 
 # %%
-
 def reassign_unlabeled_sources(
     source_labels,
     coords_mm,
     atlas_data,
     atlas_affine,
     threshold_mm=7.0,
-    include_white_matter=True,
 ):
-    
     source_labels_fixed = source_labels.copy()
 
-    # Find unlabeled sources
-    unlabeled_mask = source_labels == 0
+    # Find unlabeled sources: 0 or NaN
+    unlabeled_mask = (source_labels == 0) | np.isnan(source_labels)
+
     unlabeled_coords = coords_mm[unlabeled_mask]
     unlabeled_indices = np.where(unlabeled_mask)[0]
 
@@ -53,21 +51,12 @@ def reassign_unlabeled_sources(
         print("No unlabeled sources found.")
         return source_labels_fixed
 
-    # Atlas voxels with real labels
+    # Use all real atlas labels
+    # This includes cortex, subcortex, and white matter
     valid_atlas_mask = atlas_data != 0
-
-    # FreeSurfer aseg white matter labels
-    # 2  = Left-Cerebral-White-Matter
-    # 41 = Right-Cerebral-White-Matter
-    white_matter_labels = [2, 41]
-
-    if not include_white_matter:
-        valid_atlas_mask &= ~np.isin(atlas_data, white_matter_labels)
 
     atlas_labeled_vox = np.array(np.where(valid_atlas_mask)).T
     atlas_labeled_labels = atlas_data[valid_atlas_mask]
-
-    #print("Atlas voxels used:", len(atlas_labeled_vox))
 
     if len(atlas_labeled_vox) == 0:
         raise ValueError("No valid atlas voxels found.")
@@ -81,26 +70,25 @@ def reassign_unlabeled_sources(
     atlas_labeled_ras = atlas_labeled_vox_h @ atlas_affine.T
     atlas_labeled_ras = atlas_labeled_ras[:, :3]
 
-    # Build KDTree from all valid labeled atlas voxels
+    # Build KDTree from all labeled atlas voxels
     tree = cKDTree(atlas_labeled_ras)
 
-    # For each unlabeled source, find nearest atlas voxel
+    # Find nearest labeled atlas voxel for each unlabeled source
     dist, nearest_idx = tree.query(unlabeled_coords, k=1)
 
-    # Only assign sources close enough
+    # Assign only if close enough
     assign_mask = dist <= threshold_mm
 
     candidate_source_indices = unlabeled_indices[assign_mask]
     nearest_labels = atlas_labeled_labels[nearest_idx[assign_mask]]
 
-    # Assign nearest atlas labels
     source_labels_fixed[candidate_source_indices] = nearest_labels
 
     print("Reassigned sources:", len(candidate_source_indices))
     print("Still unlabeled:", np.sum(source_labels_fixed == 0))
+    
 
     return source_labels_fixed
-
 
 # %%
 root = Path("~/Data/ds005810")
@@ -124,7 +112,7 @@ else:
 
 # %%
 threshold_mm = 3.0
-
+print(f"Threshold={threshold_mm}mm")
 atlas_file = os.path.join(
     subjects_dir,
     "fsaverage2",
@@ -167,7 +155,7 @@ source_labels_fixed = reassign_unlabeled_sources(
     atlas_data=atlas_data,
     atlas_affine=atlas.affine,
     threshold_mm=threshold_mm,
-    include_white_matter=True,            #can assigned labels to white matter
+    
 )
 
 
