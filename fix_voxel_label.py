@@ -14,11 +14,7 @@
 
 # %%
 import mne
-import pandas as pd
 import numpy as np
-from ncrf import fit_ncrf
-from eelbrain import NDVar, UTS
-from eelbrain import plot, combine
 from eelbrain import *
 from eelbrain._data_obj import VolumeSourceSpace
 import os    
@@ -32,27 +28,23 @@ import copy # for creating a copy of sources
 # %%
 def reassign_unlabeled_sources(
     source_labels,
-    coords_mm,
+    coords_mm,                #RAS coords of source points
     atlas_data,
-    atlas_affine,
-    threshold_mm=7.0,
+    atlas_affine,             #a-fine : 4*4 transform matrxi : voxel = > RAS (mm)
+    threshold_mm=5.0,
 ):
     source_labels_fixed = source_labels.copy()
 
-    # Find unlabeled sources: 0 or NaN
+    
     unlabeled_mask = (source_labels == 0) | np.isnan(source_labels)
-
     unlabeled_coords = coords_mm[unlabeled_mask]
     unlabeled_indices = np.where(unlabeled_mask)[0]
 
-    print("Initial unlabeled sources:", len(unlabeled_indices))
 
     if len(unlabeled_indices) == 0:
         print("No unlabeled sources found.")
         return source_labels_fixed
 
-    # Use all real atlas labels
-    # This includes cortex, subcortex, and white matter
     valid_atlas_mask = atlas_data != 0
 
     atlas_labeled_vox = np.array(np.where(valid_atlas_mask)).T
@@ -70,13 +62,9 @@ def reassign_unlabeled_sources(
     atlas_labeled_ras = atlas_labeled_vox_h @ atlas_affine.T
     atlas_labeled_ras = atlas_labeled_ras[:, :3]
 
-    # Build KDTree from all labeled atlas voxels
     tree = cKDTree(atlas_labeled_ras)
-
-    # Find nearest labeled atlas voxel for each unlabeled source
     dist, nearest_idx = tree.query(unlabeled_coords, k=1)
 
-    # Assign only if close enough
     assign_mask = dist <= threshold_mm
 
     candidate_source_indices = unlabeled_indices[assign_mask]
@@ -90,25 +78,26 @@ def reassign_unlabeled_sources(
 
     return source_labels_fixed
 
+# %% [markdown]
+# # src coordinates RAS mm
+
 # %%
 root = Path("~/Data/ds005810")
 subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
-
-# %%
 subject="sub-11"
 session="ImageNet01"
 all_runs_dir = "models/all_runs/morphed"
 morphed_file = f"{all_runs_dir}/M{subject}-{session}-ncrf.pickle"
 inanim, anim = load.unpickle(morphed_file)
 
-
-norm = anim.norm("space")
+norm = anim.norm("space")      # we dont need activity vector
 # Get source coordinates 
 coords = norm.source.coordinates
 if np.nanmax(np.abs(coords)) < 10:
     coords_mm = coords * 1000
 else:
     coords_mm = coords
+coords_mm
 
 # %%
 threshold_mm = 3.0
@@ -123,40 +112,33 @@ atlas_file = os.path.join(
 atlas = nib.load(atlas_file)       #read neuroimage(MRI brain image but not raw: atlas segments) atlas file
 atlas_data = atlas.get_fdata()
 
-ras_to_vox = np.linalg.inv(atlas.affine)
+ras_to_vox = np.linalg.inv(atlas.affine)          #inverse matrix : we need RAS=>VOX( coords_mm is RAS) but affine is for Vox =>RAS
 
-coords_h = np.c_[coords_mm, np.ones(len(coords_mm))]   # add 4th cordinate :[x y z 1] needed affine transforms use 4*4 matrices
+coords_h = np.c_[coords_mm, np.ones(len(coords_mm))]   # homogeneous RAS coordinates: add 4th cordinate :[x y z 1] needed affine transforms use 4*4 matrices
 vox = coords_h @ ras_to_vox.T
-vox = np.round(vox[:, :3]).astype(int)       #Rounds them to nearest voxel.
+vox = np.round(vox[:, :3]).astype(int)       #voxels are integer so round them to nearest. after product we dont need 4th coordinate
 
-# Keep only valid voxel indices :Checks whether voxel coordinates are inside the MRI volume.
-valid = (
-    (vox[:, 0] >= 0) & (vox[:, 0] < atlas_data.shape[0]) &
-    (vox[:, 1] >= 0) & (vox[:, 1] < atlas_data.shape[1]) &
-    (vox[:, 2] >= 0) & (vox[:, 2] < atlas_data.shape[2])
-)
 
-source_labels = np.full(len(coords_mm), np.nan)  #Creates an array for storing labels initially all Nan
+source_labels = []                             
+for x, y, z in vox:
+    label = atlas_data[x, y, z]                     #example: atlas_data[12,54,13] returns 1005
+    source_labels.append(label)
 
-# 1.find corresponding MRI voxel  2. read atlas label 3. assign label to the source index
-#Example : source 37 → voxel [81,92,77]
-#            atlas_data[81,92,77] = 1007
-#         so src 37 is in fusiform
-source_labels[valid] = atlas_data[
-    vox[valid, 0],
-    vox[valid, 1],
-    vox[valid, 2]
-]
-
+source_labels = np.array(source_labels)              #for each of 1751 source points we have read a label from MRI atlas
+print("Number of sources with label 0:", np.sum(source_labels == 0))     #atlas_data for some vox is unlabeled (0)
 #------------------------------
+
 source_labels_fixed = reassign_unlabeled_sources(
     source_labels=source_labels,
-    coords_mm=coords_mm,
+    coords_mm=coords_mm,                      #coordination RASmm of each source point
     atlas_data=atlas_data,
     atlas_affine=atlas.affine,
     threshold_mm=threshold_mm,
     
 )
+
+# %%
+atlas.shape
 
 
 # %%
