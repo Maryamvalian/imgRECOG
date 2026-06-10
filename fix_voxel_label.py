@@ -23,6 +23,7 @@ from matplotlib import pyplot as plt
 import nibabel as nib            #for loading atlas 
 from scipy.spatial import cKDTree    #a fast nearest-neighbor search algorithm for reassign label to unlabeled sources
 import copy # for creating a copy of sources
+from eelbrain._utils import mne_utils            #for converting numeric labels to string labels
 
 
 # %%
@@ -34,12 +35,10 @@ def reassign_unlabeled_sources(
     threshold_mm=5.0,
 ):
     source_labels_fixed = source_labels.copy()
-
-    
     unlabeled_mask = (source_labels == 0) | np.isnan(source_labels)
     unlabeled_coords = coords_mm[unlabeled_mask]
-    unlabeled_indices = np.where(unlabeled_mask)[0]
-
+    unlabeled_indices = np.where(unlabeled_mask)[0]             #index between 0 to 1750
+    #print(f"unlabeled indice = {unlabeled_indices}")
 
     if len(unlabeled_indices) == 0:
         print("No unlabeled sources found.")
@@ -50,18 +49,15 @@ def reassign_unlabeled_sources(
     atlas_labeled_vox = np.array(np.where(valid_atlas_mask)).T
     atlas_labeled_labels = atlas_data[valid_atlas_mask]
 
-    if len(atlas_labeled_vox) == 0:
-        raise ValueError("No valid atlas voxels found.")
-
     # Convert atlas voxel coordinates to RAS mm
-    atlas_labeled_vox_h = np.c_[
+    atlas_labeled_vox_h = np.c_[                     #add 4th cooordinatte 1 for affine is 4*4
         atlas_labeled_vox,
         np.ones(len(atlas_labeled_vox))
     ]
-
     atlas_labeled_ras = atlas_labeled_vox_h @ atlas_affine.T
     atlas_labeled_ras = atlas_labeled_ras[:, :3]
 
+    # Find approximate nearest neighbour
     tree = cKDTree(atlas_labeled_ras)
     dist, nearest_idx = tree.query(unlabeled_coords, k=1)
 
@@ -90,9 +86,8 @@ all_runs_dir = "models/all_runs/morphed"
 morphed_file = f"{all_runs_dir}/M{subject}-{session}-ncrf.pickle"
 inanim, anim = load.unpickle(morphed_file)
 
-norm = anim.norm("space")      # we dont need activity vector
 # Get source coordinates 
-coords = norm.source.coordinates
+coords = anim.source.coordinates
 if np.nanmax(np.abs(coords)) < 10:
     coords_mm = coords * 1000
 else:
@@ -100,8 +95,9 @@ else:
 coords_mm
 
 # %%
-threshold_mm = 3.0
-print(f"Threshold={threshold_mm}mm")
+threshold_mm = 5.0
+print(f"Threshold= {threshold_mm} mm")
+
 atlas_file = os.path.join(
     subjects_dir,
     "fsaverage2",
@@ -152,7 +148,9 @@ def plot_unlabeled_sources_on_mri(
     slices=[70, 80, 90, 100, 110],
     orientation="sagittal",
 ):
-    
+    """
+    Only plots unlabeled sources. makes a new src that only includes unlabeled sources, then plots.
+    """
     src = d.source.get_source_space()
 
     bad_mask = (
@@ -162,13 +160,7 @@ def plot_unlabeled_sources_on_mri(
 
     bad_src = copy.deepcopy(src)
 
-    all_used_vertices = src[0]["vertno"]
-
-    if len(bad_mask) != len(all_used_vertices):
-        raise ValueError(
-            f"Mask length {len(bad_mask)} does not match "
-            f"source vertices length {len(all_used_vertices)}"
-        )
+    all_used_vertices = src[0]["vertno"]          #MNE vertex ID of all 1751  
 
     bad_vertices = all_used_vertices[bad_mask]
 
@@ -178,7 +170,6 @@ def plot_unlabeled_sources_on_mri(
     bad_src[0]["inuse"][:] = 0
     bad_src[0]["inuse"][bad_vertices] = 1
 
-    print("Bad sources:", len(bad_vertices))
     print("Saving to:", out_file)
 
     fig = mne.viz.plot_bem(
@@ -201,7 +192,7 @@ def plot_unlabeled_sources_on_mri(
 # %%
 fig_before = plot_unlabeled_sources_on_mri(
     labels=source_labels,
-    d=norm,
+    d=anim,
     subject=subject,
     subjects_dir=subjects_dir,
     out_file="figures/bad/unlabeled_sources_before_fixing_sagittal.pdf",
@@ -210,7 +201,7 @@ fig_before = plot_unlabeled_sources_on_mri(
 
 fig_after = plot_unlabeled_sources_on_mri(
     labels=source_labels_fixed,
-    d=norm,
+    d=anim,
     subject=subject,
     subjects_dir=subjects_dir,
     out_file="figures/bad/unlabeled_sources_after_fixing_sagittal.pdf",
@@ -218,7 +209,269 @@ fig_after = plot_unlabeled_sources_on_mri(
 )
 
 # %%
+src=anim.source.get_source_space()
 
 # %%
+src[0].keys()
+
+# %%
+src[0]["vertno"]  #vertex numbers:MNE's IDs for the active source locations
+
+# %%
+src[0]["nuse"]   #Number of active (valid) source location. ( 1751 grid points survived the filtering)
+
+# %%
+src[0]["inuse"]   #A binary array telling whether each possible source location is active.
+#out of 16675 only 1751 is active. In binary array there are 1751 '1' and the rest is zero
+#16675 : Candidate Grid points ---> only acceptable candidate  (inside brain volume, not too close to skull, In regions's excluded by source space construction
+
+# %%
+for source_idx, vertex_id in enumerate(src[0]["vertno"][:5]):
+    print(
+        f"source index = {source_idx:4d}   "
+        f"vertex id = {vertex_id:5d}"
+    )
+
+
+# %% [markdown]
+# # ROI after fixed labels
+
+# %% [markdown]
+# ## Load Dataset and run ttest
+
+# %%
+def load_one_session_data():
+    cases = []
+    one_session_dir = "models/all_runs/morphed"
+
+    for i in range(1, 31):
+
+        subject = f"sub-{i:02d}"
+
+        if i > 9:
+            session = "ImageNet01"
+        else:
+            session = "ImageNet03"
+
+        morphed_file = f"{one_session_dir}/M{subject}-{session}-ncrf.pickle"
+
+        try:
+            inanim, anim = load.unpickle(morphed_file)
+
+            cases.append([subject, "inanimate", inanim])
+            cases.append([subject, "animate", anim])
+
+        except Exception as e:
+            print(f"Skipping {subject}-{session}: {e}")
+            continue
+
+    data = Dataset.from_caselist(
+        ["subject", "animacy", "ncrf"],
+        cases
+    )
+
+    print("Loaded cases:", len(cases))
+
+    return data
+
+
+data_onesession = load_one_session_data()
+
+res_onesession = testnd.VectorDifferenceRelated(
+    "ncrf",
+    "animacy",
+    "inanimate",
+    "animate",
+    match="subject",
+    data=data_onesession,
+    tfce=True,
+    tstart=100,
+    tstop=700,
+    samples=1000
+)
+
+diff_onesession = res_onesession.masked_difference()
+
+# %%
+# Convert numeric labels to FreeSurfer string labels
+label_names = mne_utils.get_volume_source_space_labels()
+
+source_label_names_fixed = np.array([
+    label_names[int(label)]
+    if not np.isnan(label)
+    else "NaN"
+    for label in source_labels_fixed
+])
+
+
+ROI_LABELS = {
+    "Lateral_Occipital": [
+        "ctx-lh-lateraloccipital",
+        "ctx-rh-lateraloccipital",
+    ],
+
+    "medial_visual": [
+        "ctx-lh-cuneus",
+        "ctx-rh-cuneus",
+        "ctx-lh-lingual",
+        "ctx-rh-lingual",
+        "ctx-lh-pericalcarine",
+        "ctx-rh-pericalcarine",
+    ],
+
+    "fusiform": [
+        "ctx-lh-fusiform",
+        "ctx-rh-fusiform",
+    ],
+
+    "inferior_temporal": [
+        "ctx-lh-inferiortemporal",
+        "ctx-rh-inferiortemporal",
+    ],
+}
+
+
+ROI_COLORS = {
+    "Lateral_Occipital": "#0072B2",
+    "medial_visual": "#009E73",
+    "fusiform": "#CC79A7",
+    "inferior_temporal": "#E69F00",
+}
+
+
+ROI_TITLES = {
+    "Lateral_Occipital": "Lateral occipital",
+    "medial_visual": "Medial visual: cuneus, lingual, pericalcarine",
+    "fusiform": "Fusiform",
+    "inferior_temporal": "Inferior temporal",
+}
+
+
+def plot_ROI(roi_name, diff, source_label_names, error="sem", save=True):
+
+    if roi_name not in ROI_LABELS:
+        raise ValueError(f"Unknown ROI: {roi_name}")
+
+    roi_label_names = ROI_LABELS[roi_name]
+
+    roi_mask = np.isin(source_label_names, roi_label_names)
+
+    print(f"\nROI: {roi_name}")
+    print("ROI label names:", roi_label_names)
+    print("Number of ROI sources:", np.sum(roi_mask))
+
+    if np.sum(roi_mask) == 0:
+        raise RuntimeError(f"No sources found for ROI: {roi_name}")
+
+    d_roi = diff.sub(source=roi_mask)
+
+    d_roi_norm = d_roi.norm("space")
+    x = d_roi_norm.x
+
+    mean_roi = np.nanmean(x, axis=0)
+
+    if error == "sem":
+        err_roi = np.nanstd(x, axis=0, ddof=1) / np.sqrt(x.shape[0])
+        err_label = "SEM"
+    elif error == "sd":
+        err_roi = np.nanstd(x, axis=0, ddof=1)
+        err_label = "SD"
+    else:
+        raise ValueError("error must be 'sem' or 'sd'")
+
+    times = d_roi_norm.time.times
+    main_color = ROI_COLORS.get(roi_name, "#0072B2")
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    ax.plot(
+        times,
+        mean_roi,
+        color=main_color,
+        linewidth=2,
+        label="Mean across ROI sources",
+    )
+
+    ax.fill_between(
+        times,
+        mean_roi - err_roi,
+        mean_roi + err_roi,
+        color=main_color,
+        alpha=0.2,
+        linewidth=0,
+        label=err_label,
+    )
+
+    for t in [118, 244, 359, 492]:
+        ax.axvline(
+            t,
+            color="gray",
+            linewidth=0.5,
+            linestyle="--",
+            alpha=0.7,
+        )
+
+    ax.set_title(f"{ROI_TITLES[roi_name]}: 1000 trials")
+    ax.set_xlabel("Time [ms]")
+    ax.set_ylabel("Mean difference in ROI")
+    ax.legend(frameon=False)
+
+    fig.tight_layout()
+
+    if save:
+        os.makedirs("figures/ROI", exist_ok=True)
+        filename = f"figures/ROI/1000_{roi_name}_{error}.pdf"
+        fig.savefig(filename, bbox_inches="tight", transparent=True)
+        print("Saved:", filename)
+
+    plt.show()
+
+    return fig, ax
+
+
+for roi in ROI_LABELS:
+    plot_ROI(
+        roi_name=roi,
+        diff=diff_onesession,
+        source_label_names=source_label_names_fixed,
+        error="sem",
+        save=True,
+    )
+
+# %% [markdown]
+# # Compare before/after fixing label ROI plots
+
+# %%
+source_label_names = np.array([
+    label_names[int(label)]
+    if not np.isnan(label)
+    else "NaN"
+    for label in source_labels
+])
+for roi_name, roi_labels in ROI_LABELS.items():
+
+    n_before = np.sum(
+        np.isin(source_label_names, roi_labels)
+    )
+
+    n_after = np.sum(
+        np.isin(source_label_names_fixed, roi_labels)
+    )
+
+    print(
+        f"{roi_name:20s} "
+        f"before={n_before:4d} "
+        f"after={n_after:4d}"
+    )
+
+# %%
+for roi in ROI_LABELS:
+    plot_ROI(
+        roi_name=roi,
+        diff=diff_onesession,
+        source_label_names=source_label_names,
+        error="sem",
+        save=True
+    )
 
 # %%
