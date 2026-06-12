@@ -37,7 +37,7 @@ def reassign_unlabeled_sources(
     source_labels_fixed = source_labels.copy()
     unlabeled_mask = (source_labels == 0) | np.isnan(source_labels)
     unlabeled_coords = coords_mm[unlabeled_mask]
-    unlabeled_indices = np.where(unlabeled_mask)[0]             #index between 0 to 1750
+    unlabeled_indices = np.where(unlabeled_mask)[0]             #source index between 0 to 1750 ( Not vertex ID!)
     #print(f"unlabeled indice = {unlabeled_indices}")
 
     if len(unlabeled_indices) == 0:
@@ -472,6 +472,599 @@ for roi in ROI_LABELS:
         source_label_names=source_label_names,
         error="sem",
         save=True
+    )
+
+# %% [markdown]
+# # Plot ROI BRAIN
+#
+
+# %%
+from matplotlib.colors import ListedColormap
+from nilearn import plotting
+from nilearn.plotting import find_xyz_cut_coords
+
+
+
+subject = "fsaverage2"   
+
+atlas_file = os.path.join(
+    subjects_dir,
+    subject,
+    "mri",
+    "aparc+aseg.mgz"
+)
+
+brain_file = os.path.join(              #background MRI of ROI
+    subjects_dir,
+    subject,
+    "mri",
+    "brain.mgz"
+)
+
+atlas = nib.load(atlas_file)
+brain_img = nib.load(brain_file)
+
+#--------------------------
+def make_roi_volume(atlas_img, roi_name):
+    roi_label_names = ROI_LABELS[roi_name]
+
+    atlas_data = atlas_img.get_fdata()
+    roi_vol = np.zeros(atlas_data.shape, dtype=np.int16)
+
+    label_names = mne_utils.get_volume_source_space_labels()
+
+    roi_value = 1
+
+    for label_value, label_name in label_names.items():
+        if label_name in roi_label_names:
+            roi_vol[atlas_data == int(label_value)] = roi_value
+            roi_value += 1
+
+    roi_img = nib.Nifti1Image(
+        roi_vol,
+        atlas_img.affine,
+        atlas_img.header
+    )
+
+    print("\nROI:", roi_name)
+    print("ROI labels:", roi_label_names)
+    print("Unique values:", np.unique(roi_img.get_fdata(), return_counts=True))
+    print("Number of ROI voxels:", np.sum(roi_img.get_fdata() > 0))
+
+    return roi_img
+
+
+#------------------------
+def plot_roi_nilearn(roi_name, atlas_img, bg_img, save=True):
+    plt.close("all")
+
+    roi_img = make_roi_volume(
+        atlas_img=atlas_img,
+        roi_name=roi_name,
+    )
+
+    roi_data = roi_img.get_fdata()
+
+    if np.sum(roi_data > 0) == 0:
+        raise RuntimeError(f"No voxels found for ROI: {roi_name}")
+
+    cut_coords = find_xyz_cut_coords(roi_img)
+
+    color = ROI_COLORS[roi_name]
+
+    cmap = ListedColormap([
+        (0, 0, 0, 0),  # background transparent
+        color,
+        color,
+        color,
+        color,
+        color,
+        color,
+    ])
+
+    display = plotting.plot_roi(
+        roi_img,
+        bg_img=bg_img,
+        display_mode="ortho",
+        cut_coords=cut_coords,
+        cmap=cmap,
+        alpha=0.85,
+        title=ROI_TITLES[roi_name],
+        black_bg=False,
+        draw_cross=False,
+    )
+
+    if save:
+        os.makedirs("figures/ROI_nilearn", exist_ok=True)
+        filename = f"figures/ROI_nilearn/{roi_name}_nilearn.pdf"
+        display.savefig(filename)
+        print("Saved:", filename)
+
+    plotting.show()
+
+    return display
+
+
+#-------------
+for roi in ROI_LABELS:
+    plot_roi_nilearn(
+        roi_name=roi,
+        atlas_img=atlas,
+        bg_img=brain_img,
+        save=True,
+    )
+
+# %%
+import os
+import numpy as np
+import nibabel as nib
+import matplotlib.pyplot as plt
+from nilearn import plotting
+
+
+# --------------------------
+# Load MRI background
+# --------------------------
+
+subject = "fsaverage2"
+
+brain_file = os.path.join(
+    subjects_dir,
+    subject,
+    "mri",
+    "brain.mgz"
+)
+
+brain_img = nib.load(brain_file)
+
+
+# --------------------------
+# Fixed labels: numeric -> string
+# --------------------------
+
+label_names = mne_utils.get_volume_source_space_labels()
+
+source_label_names_fixed = np.array([
+    label_names[int(label)]
+    if not np.isnan(label)
+    else "NaN"
+    for label in source_labels_fixed
+])
+
+
+# --------------------------
+# Plot fixed ROI source points
+# --------------------------
+
+def plot_fixed_sources_nilearn(
+    roi_name,
+    source_label_names_fixed,
+    coords,
+    bg_img,
+    save=True,
+    n_slices=8,
+    marker_size=45,
+):
+    plt.close("all")
+
+    roi_label_names = ROI_LABELS[roi_name]
+
+    roi_mask = np.isin(
+        source_label_names_fixed,
+        roi_label_names
+    )
+
+    print("\nROI:", roi_name)
+    print("ROI labels:", roi_label_names)
+    print("Number of fixed source points:", np.sum(roi_mask))
+
+    if np.sum(roi_mask) == 0:
+        raise RuntimeError(f"No fixed sources found for ROI: {roi_name}")
+
+    roi_coords = coords[roi_mask]
+
+    # MNE source coordinates are often in meters.
+    # Nilearn uses millimeters.
+    if np.nanmax(np.abs(roi_coords)) < 1:
+        roi_coords = roi_coords * 1000
+
+    color = ROI_COLORS[roi_name]
+
+    z_min = roi_coords[:, 2].min()
+    z_max = roi_coords[:, 2].max()
+
+    if z_min == z_max:
+        cut_coords = [z_min]
+    else:
+        cut_coords = np.linspace(z_min, z_max, n_slices)
+
+    display = plotting.plot_anat(
+        bg_img,
+        display_mode="x",
+        cut_coords=cut_coords,
+        title=ROI_TITLES[roi_name] + " fixed sources",
+        black_bg=False,
+        draw_cross=False,
+    )
+
+    display.add_markers(
+        marker_coords=roi_coords,
+        marker_color=color,
+        marker_size=marker_size,
+    )
+
+    if save:
+        os.makedirs("figures/ROI_nilearn_fixed_sources", exist_ok=True)
+        filename = f"figures/ROI_nilearn_fixed_sources/{roi_name}_fixed_sources.pdf"
+        display.savefig(filename)
+        print("Saved:", filename)
+
+    plotting.show()
+
+    return display
+
+
+# --------------------------
+# Plot all fixed ROIs
+# --------------------------
+
+for roi in ROI_LABELS:
+    plot_fixed_sources_nilearn(
+        roi_name=roi,
+        source_label_names_fixed=source_label_names_fixed,
+        coords=coords,
+        bg_img=brain_img,
+        save=True,
+        n_slices=8,
+        marker_size=45,
+    )
+
+# %%
+import os
+import numpy as np
+import nibabel as nib
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+from nilearn import plotting
+from nilearn.plotting import find_xyz_cut_coords
+
+
+# --------------------------
+# Load atlas + MRI background
+# --------------------------
+
+subject = "fsaverage2"
+
+atlas_file = os.path.join(
+    subjects_dir,
+    subject,
+    "mri",
+    "aparc+aseg.mgz"
+)
+
+brain_file = os.path.join(
+    subjects_dir,
+    subject,
+    "mri",
+    "brain.mgz"
+)
+
+atlas = nib.load(atlas_file)
+brain_img = nib.load(brain_file)
+
+
+# --------------------------
+# Convert fixed labels to names
+# --------------------------
+
+label_names = mne_utils.get_volume_source_space_labels()
+
+source_label_names_fixed = np.array([
+    label_names[int(label)]
+    if not np.isnan(label)
+    else "NaN"
+    for label in source_labels_fixed
+])
+
+
+# --------------------------
+# Make anatomical ROI parcel
+# --------------------------
+
+def make_atlas_roi_volume(atlas_img, roi_name):
+    roi_label_names = ROI_LABELS[roi_name]
+
+    atlas_data = atlas_img.get_fdata()
+    roi_vol = np.zeros(atlas_data.shape, dtype=np.int16)
+
+    roi_value = 1
+
+    for label_value, label_name in label_names.items():
+        if label_name in roi_label_names:
+            roi_vol[atlas_data == int(label_value)] = roi_value
+            roi_value += 1
+
+    roi_img = nib.Nifti1Image(
+        roi_vol,
+        atlas_img.affine,
+        atlas_img.header
+    )
+
+    return roi_img
+
+
+# --------------------------
+# Plot parcel + fixed sources
+# --------------------------
+
+def plot_parcel_with_fixed_sources(
+    roi_name,
+    atlas_img,
+    bg_img,
+    source_label_names_fixed,
+    coords,
+    save=True,
+):
+    plt.close("all")
+
+    roi_label_names = ROI_LABELS[roi_name]
+
+    # Anatomical parcel
+    roi_img = make_atlas_roi_volume(
+        atlas_img=atlas_img,
+        roi_name=roi_name
+    )
+
+    if np.sum(roi_img.get_fdata() > 0) == 0:
+        raise RuntimeError(f"No atlas ROI voxels found for {roi_name}")
+
+    # Fixed source points
+    source_mask = np.isin(
+        source_label_names_fixed,
+        roi_label_names
+    )
+
+    print("\nROI:", roi_name)
+    print("ROI labels:", roi_label_names)
+    print("Number of fixed source points:", np.sum(source_mask))
+    print("Number of atlas ROI voxels:", np.sum(roi_img.get_fdata() > 0))
+
+    if np.sum(source_mask) == 0:
+        raise RuntimeError(f"No fixed source points found for {roi_name}")
+
+    source_coords = coords[source_mask]
+
+    # MNE coords are usually meters; Nilearn uses mm
+    if np.nanmax(np.abs(source_coords)) < 1:
+        source_coords = source_coords * 1000
+
+    xyz = find_xyz_cut_coords(roi_img)
+    cut_coords = [ xyz[0],  # x sagittal
+                   xyz[2], ] # z axial
+
+    color = ROI_COLORS[roi_name]
+
+    cmap = ListedColormap([
+        (0, 0, 0, 0),  # transparent background
+        color,
+        color,
+        color,
+        color,
+        color,
+        color,
+    ])
+
+    display = plotting.plot_roi(
+        roi_img,
+        bg_img=bg_img,
+        display_mode="xz",
+        cut_coords=cut_coords,
+        cmap=cmap,
+        alpha=0.45,
+        title=ROI_TITLES[roi_name] + " + fixed sources",
+        black_bg=False,
+        draw_cross=False,
+    )
+
+    display.add_markers(
+        marker_coords=source_coords,
+        marker_color=color,
+        marker_size=50,
+    )
+
+    if save:
+        os.makedirs("figures/ROI_parcel_plus_fixed_sources", exist_ok=True)
+        filename = f"figures/ROI_parcel_plus_fixed_sources/{roi_name}_parcel_plus_fixed_sources.pdf"
+        display.savefig(filename)
+        print("Saved:", filename)
+
+    plotting.show()
+
+    return display
+
+
+# --------------------------
+# Plot all ROIs
+# --------------------------
+
+for roi in ROI_LABELS:
+    plot_parcel_with_fixed_sources(
+        roi_name=roi,
+        atlas_img=atlas,
+        bg_img=brain_img,
+        source_label_names_fixed=source_label_names_fixed,
+        coords=coords,
+        save=True,
+    )
+
+# %%
+import os
+import numpy as np
+import nibabel as nib
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+from nilearn import plotting
+
+
+subject = "fsaverage2"
+
+atlas_file = os.path.join(subjects_dir, subject, "mri", "aparc+aseg.mgz")
+brain_file = os.path.join(subjects_dir, subject, "mri", "brain.mgz")
+
+atlas = nib.load(atlas_file)
+brain_img = nib.load(brain_file)
+
+
+label_names = mne_utils.get_volume_source_space_labels()
+
+source_label_names_fixed = np.array([
+    label_names[int(label)]
+    if not np.isnan(label)
+    else "NaN"
+    for label in source_labels_fixed
+])
+
+
+def make_atlas_roi_volume(atlas_img, roi_name):
+    roi_label_names = ROI_LABELS[roi_name]
+
+    atlas_data = atlas_img.get_fdata()
+    roi_vol = np.zeros(atlas_data.shape, dtype=np.int16)
+
+    roi_value = 1
+
+    for label_value, label_name in label_names.items():
+        if label_name in roi_label_names:
+            roi_vol[atlas_data == int(label_value)] = roi_value
+            roi_value += 1
+
+    return nib.Nifti1Image(
+        roi_vol,
+        atlas_img.affine,
+        atlas_img.header,
+    )
+
+
+def best_xz_cut_coords_from_fixed_sources(source_coords):
+    """
+    For display_mode='xz'.
+    Returns [best_x, best_z].
+    """
+
+    left = source_coords[source_coords[:, 0] < 0]
+    right = source_coords[source_coords[:, 0] > 0]
+
+    if len(left) > 0 and len(right) > 0:
+        # Bilateral ROI: choose the side with more sources
+        if len(right) >= len(left):
+            best_x = np.median(right[:, 0])
+        else:
+            best_x = np.median(left[:, 0])
+    else:
+        # One-sided or mostly centered ROI
+        best_x = np.median(source_coords[:, 0])
+
+    best_z = np.median(source_coords[:, 2])
+
+    return [float(best_x), float(best_z)]
+
+
+def plot_parcel_with_fixed_sources_best_xz(
+    roi_name,
+    atlas_img,
+    bg_img,
+    source_label_names_fixed,
+    coords,
+    save=True,
+):
+    plt.close("all")
+
+    roi_label_names = ROI_LABELS[roi_name]
+
+    # Atlas anatomical parcel
+    roi_img = make_atlas_roi_volume(
+        atlas_img=atlas_img,
+        roi_name=roi_name,
+    )
+
+    if np.sum(roi_img.get_fdata() > 0) == 0:
+        raise RuntimeError(f"No atlas ROI voxels found for {roi_name}")
+
+    # Fixed source points
+    source_mask = np.isin(
+        source_label_names_fixed,
+        roi_label_names,
+    )
+
+    if np.sum(source_mask) == 0:
+        raise RuntimeError(f"No fixed source points found for {roi_name}")
+
+    source_coords = coords[source_mask]
+
+    # MNE coords are usually in meters; Nilearn uses millimeters
+    if np.nanmax(np.abs(source_coords)) < 1:
+        source_coords = source_coords * 1000
+
+    cut_coords = best_xz_cut_coords_from_fixed_sources(source_coords)
+
+    print("\nROI:", roi_name)
+    print("ROI labels:", roi_label_names)
+    print("Number of fixed source points:", np.sum(source_mask))
+    print("Number of atlas ROI voxels:", np.sum(roi_img.get_fdata() > 0))
+    print("Best cut coords [x, z]:", cut_coords)
+
+    color = ROI_COLORS[roi_name]
+
+    cmap = ListedColormap([
+        (0, 0, 0, 0),
+        color,
+        color,
+        color,
+        color,
+        color,
+        color,
+    ])
+
+    display = plotting.plot_roi(
+        roi_img,
+        bg_img=bg_img,
+        display_mode="xz",      # sagittal + axial only
+        cut_coords=cut_coords,  # [x, z]
+        cmap=cmap,
+        alpha=0.40,
+        title=f"{ROI_TITLES[roi_name]} ",
+        black_bg=False,
+        draw_cross=False,
+    )
+
+    display.add_markers(
+        marker_coords=source_coords,
+        marker_color=color,
+        marker_size=50,
+    )
+
+    if save:
+        os.makedirs("figures/ROI_parcel_plus_fixed_sources", exist_ok=True)
+        filename = (
+            f"figures/ROI_parcel_plus_fixed_sources/"
+            f"{roi_name}_parcel_plus_fixed_sources_xz.pdf"
+        )
+        display.savefig(filename)
+        print("Saved:", filename)
+
+    plotting.show()
+
+    return display
+
+
+for roi in ROI_LABELS:
+    plot_parcel_with_fixed_sources_best_xz(
+        roi_name=roi,
+        atlas_img=atlas,
+        bg_img=brain_img,
+        source_label_names_fixed=source_label_names_fixed,
+        coords=coords,
+        save=True,
     )
 
 # %%
