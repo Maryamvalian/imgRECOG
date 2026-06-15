@@ -595,16 +595,7 @@ for roi in ROI_LABELS:
     )
 
 # %%
-import os
-import numpy as np
-import nibabel as nib
-import matplotlib.pyplot as plt
 from nilearn import plotting
-
-
-# --------------------------
-# Load MRI background
-# --------------------------
 
 subject = "fsaverage2"
 
@@ -617,11 +608,6 @@ brain_file = os.path.join(
 
 brain_img = nib.load(brain_file)
 
-
-# --------------------------
-# Fixed labels: numeric -> string
-# --------------------------
-
 label_names = mne_utils.get_volume_source_space_labels()
 
 source_label_names_fixed = np.array([
@@ -631,10 +617,6 @@ source_label_names_fixed = np.array([
     for label in source_labels_fixed
 ])
 
-
-# --------------------------
-# Plot fixed ROI source points
-# --------------------------
 
 def plot_fixed_sources_nilearn(
     roi_name,
@@ -702,11 +684,7 @@ def plot_fixed_sources_nilearn(
     plotting.show()
 
     return display
-
-
-# --------------------------
-# Plot all fixed ROIs
-# --------------------------
+#-----------------
 
 for roi in ROI_LABELS:
     plot_fixed_sources_nilearn(
@@ -720,10 +698,6 @@ for roi in ROI_LABELS:
     )
 
 # %%
-import os
-import numpy as np
-import nibabel as nib
-import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from nilearn import plotting
 
@@ -768,10 +742,6 @@ def make_atlas_roi_volume(atlas_img, roi_name):
 
 
 def best_xz_cut_coords_from_fixed_sources(source_coords):
-    """
-    For display_mode='xz'.
-    Returns [best_x, best_z].
-    """
 
     left = source_coords[source_coords[:, 0] < 0]
     right = source_coords[source_coords[:, 0] > 0]
@@ -852,8 +822,10 @@ def plot_parcel_with_fixed_sources_best_xz(
         bg_img=bg_img,
         display_mode="xz",      # sagittal + axial only
         cut_coords=cut_coords,  # [x, z]
-        cmap=cmap,
-        alpha=0.40,
+        cmap=ListedColormap([                  #cmap=cmap 
+            (0, 0, 0, 0),
+            (0.5, 0.5, 0.5, 1.0)]),
+        alpha=0.01,                          #alpha=0.4
         title=f"{ROI_TITLES[roi_name]} ",
         black_bg=False,
         draw_cross=False,
@@ -930,9 +902,12 @@ anim_roi_med = anim.copy()
 anim_roi_med.x[~roi_mask, :, :] = 0
 
 # %%
-plot.GlassBrain(anim_roi_med.sub(time=110),title=f"Medial visual ROI {t} ms") 
+plot.GlassBrain(anim_roi_med.sub(time=110),title=f"Medial visual ROIms") 
 
 # %%
-plot.GlassBrain(anim.sub(time=110),title=f"Anim{t} ms") 
+plot.GlassBrain(anim.sub(time=110),title=f"Anim ms") 
+
+# %%
+res_onesession.t2
 
 # %%
