@@ -25,6 +25,31 @@ from scipy.spatial import cKDTree    #a fast nearest-neighbor search algorithm f
 import copy # for creating a copy of sources
 from eelbrain._utils import mne_utils            #for converting numeric labels to string labels
 
+# %%
+# Configure matplotlib figure style
+FONT = "Arial"
+FONT_SIZE = 10
+
+RC = {
+    "figure.dpi": 100,
+    "savefig.dpi": 300,
+    "savefig.transparent": True,
+
+    "font.family": "sans-serif",
+    "font.sans-serif": FONT,
+    "font.size": FONT_SIZE,
+
+    "figure.labelsize": FONT_SIZE,
+    "figure.titlesize": FONT_SIZE,
+    "axes.labelsize": FONT_SIZE,
+    "axes.titlesize": FONT_SIZE,
+    "xtick.labelsize": FONT_SIZE,
+    "ytick.labelsize": FONT_SIZE,
+    "legend.fontsize": FONT_SIZE,
+}
+
+plt.rcParams.update(RC)
+
 
 # %%
 def reassign_unlabeled_sources(
@@ -420,13 +445,175 @@ def plot_ROI(roi_name, diff, source_label_names, error="sem", save=True):
 
     if save:
         os.makedirs("figures/ROI", exist_ok=True)
-        filename = f"figures/ROI/1000_{roi_name}_{error}.pdf"
+        filename = f"figures/ROI/1000_{roi_name}_{error}.svg"
         fig.savefig(filename, bbox_inches="tight", transparent=True)
         print("Saved:", filename)
 
     plt.show()
 
     return fig, ax
+
+
+for roi in ROI_LABELS:
+    plot_ROI(
+        roi_name=roi,
+        diff=diff_onesession,
+        source_label_names=source_label_names_fixed,
+        error="sem",
+        save=True,
+    )
+
+# %%
+label_names = mne_utils.get_volume_source_space_labels()
+
+source_label_names_fixed = np.array([
+    label_names[int(label)]
+    if not np.isnan(label)
+    else "NaN"
+    for label in source_labels_fixed
+])
+
+
+ROI_LABELS = {
+    "Lateral_Occipital": [
+        "ctx-lh-lateraloccipital",
+        "ctx-rh-lateraloccipital",
+    ],
+
+    "medial_visual": [
+        "ctx-lh-cuneus",
+        "ctx-rh-cuneus",
+        "ctx-lh-lingual",
+        "ctx-rh-lingual",
+        "ctx-lh-pericalcarine",
+        "ctx-rh-pericalcarine",
+    ],
+
+    "fusiform": [
+        "ctx-lh-fusiform",
+        "ctx-rh-fusiform",
+    ],
+
+    "inferior_temporal": [
+        "ctx-lh-inferiortemporal",
+        "ctx-rh-inferiortemporal",
+    ],
+    "ventral_temporal": [
+        "ctx-lh-fusiform",
+        "ctx-rh-fusiform",
+        "ctx-lh-inferiortemporal",
+        "ctx-rh-inferiortemporal",
+],
+}
+
+
+ROI_COLORS = {
+    "Lateral_Occipital": "#0072B2",
+    "medial_visual": "#009E73",
+    "fusiform": "#CC79A7",
+    "inferior_temporal": "#E69F00",
+    "ventral_temporal": "#A65628",
+    
+}
+
+
+ROI_TITLES = {
+    "Lateral_Occipital": "Lateral occipital",
+    "medial_visual": "Medial visual",
+    "fusiform": "Fusiform",
+    "inferior_temporal": "Inferior temporal",
+    "ventral_temporal": "Ventral temporal ",
+}
+
+
+def plot_ROI(roi_name, diff, source_label_names, error="sem", save=True):
+
+    if roi_name not in ROI_LABELS:
+        raise ValueError(f"Unknown ROI: {roi_name}")
+
+    roi_label_names = ROI_LABELS[roi_name]
+    roi_mask = np.isin(source_label_names, roi_label_names)
+
+    print(f"\nROI: {roi_name}")
+    print("ROI label names:", roi_label_names)
+    print("Number of ROI sources:", np.sum(roi_mask))
+
+    if np.sum(roi_mask) == 0:
+        raise RuntimeError(f"No sources found for ROI: {roi_name}")
+
+    d_roi = diff.sub(source=roi_mask)
+
+    d_roi_norm = d_roi.norm("space")
+    x = d_roi_norm.x
+
+    mean_roi = np.nanmean(x, axis=0)
+
+    if error == "sem":
+        err_roi = np.nanstd(x, axis=0, ddof=1) / np.sqrt(x.shape[0])
+        err_label = "SEM"
+    elif error == "sd":
+        err_roi = np.nanstd(x, axis=0, ddof=1)
+        err_label = "SD"
+    else:
+        raise ValueError("error must be 'sem' or 'sd'")
+
+    times = d_roi_norm.time.times
+    main_color = ROI_COLORS.get(roi_name, "#0072B2")
+
+    fig, ax = plt.subplots(figsize=(3.2, 2.2))
+
+    ax.plot(
+        times,
+        mean_roi,
+        color=main_color,
+        linewidth=1.5,
+        label="Mean",
+    )
+
+    ax.fill_between(
+        times,
+        mean_roi - err_roi,
+        mean_roi + err_roi,
+        color=main_color,
+        alpha=0.2,
+        linewidth=0,
+        label=err_label,
+    )
+
+    for t in [100, 200, 300, 400]:
+        ax.axvline(
+            t,
+            color="gray",
+            linewidth=0.5,
+            linestyle="--",
+            alpha=0.7,
+        )
+
+    ax.set_title(f"{ROI_TITLES[roi_name]}")
+    ax.set_xlabel("Time [ms]")
+    ax.set_ylabel("Mean difference")
+
+    ax.legend(frameon=False)
+
+    fig.tight_layout()
+
+    if save:
+        os.makedirs("figures/ROI", exist_ok=True)
+        filename = f"figures/ROI/1000_{roi_name}_{error}.svg"
+
+        fig.savefig(
+            filename,
+            bbox_inches="tight",
+            transparent=True,
+            dpi=300,
+        )
+
+        print("Saved:", filename)
+
+    plt.show()
+
+    return fig, ax
+
 
 
 for roi in ROI_LABELS:
@@ -826,24 +1013,32 @@ def plot_parcel_with_fixed_sources_best_xz(
             (0, 0, 0, 0),
             (0.5, 0.5, 0.5, 1.0)]),
         alpha=0.01,                          #alpha=0.4
-        title=f"{ROI_TITLES[roi_name]} ",
+        title=None,         #f"{ROI_TITLES[roi_name]} "
         black_bg=False,
-        draw_cross=False,
+        draw_cross=True,
     )
+    """
+    # Increase font size of coordinate labels
+    for ax in display.axes.values():
+        for text in ax.ax.texts:
+            text.set_fontsize(14)  
+    """
+    display.frame_axes.figure.set_size_inches(3.2, 2.2)
+    
 
     display.add_markers(
         marker_coords=source_coords,
         marker_color=color,
-        marker_size=60,
+        marker_size=40,
     )
 
     if save:
         os.makedirs("figures/ROI_parcel_plus_fixed_sources", exist_ok=True)
         filename = (
             f"figures/ROI_parcel_plus_fixed_sources/"
-            f"{roi_name}_parcel_plus_fixed_sources_xz.pdf"
+            f"{roi_name}_parcel_plus_fixed_sources_xz.svg"
         )
-        display.savefig(filename)
+        display.savefig(filename,dpi=300)
         print("Saved:", filename)
 
     plotting.show()
@@ -908,6 +1103,9 @@ plot.GlassBrain(anim_roi_med.sub(time=110),title=f"Medial visual ROIms")
 plot.GlassBrain(anim.sub(time=110),title=f"Anim ms") 
 
 # %%
-res_onesession.t2
+type(brain_img)
+
+# %%
+type(atlas)
 
 # %%
