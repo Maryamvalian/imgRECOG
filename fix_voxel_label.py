@@ -1085,6 +1085,9 @@ display = plotting.plot_roi(
 
 plotting.show()
 
+# %% [markdown]
+# # ROI plot with GlassBrain
+
 # %%
 roi_mask = np.isin(
     
@@ -1101,11 +1104,5 @@ plot.GlassBrain(anim_roi_med.sub(time=110),title=f"Medial visual ROIms")
 
 # %%
 plot.GlassBrain(anim.sub(time=110),title=f"Anim ms") 
-
-# %%
-type(brain_img)
-
-# %%
-type(atlas)
 
 # %%
