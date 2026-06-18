@@ -1092,15 +1092,15 @@ plotting.show()
 roi_mask = np.isin(
     
     source_label_names_fixed,
-    ROI_LABELS["medial_visual"],
+    ROI_LABELS["ventral_temporal"],
     
 )
 
 anim_roi_med = anim.copy()
 anim_roi_med.x[~roi_mask, :, :] = 0
+plot.GlassBrain(anim_roi_med.sub(time=110),title=f"Medial visual ROIms") 
 
 # %%
-plot.GlassBrain(anim_roi_med.sub(time=110),title=f"Medial visual ROIms") 
 
 # %%
 plot.GlassBrain(anim.sub(time=110),title=f"Anim ms") 
