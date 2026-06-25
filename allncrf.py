@@ -25,15 +25,38 @@ from eelbrain._data_obj import VolumeSourceSpace
 import os
 from pathlib import Path
 from Beyond import *
-
+from matplotlib import pyplot as plt
 
 # %%
-mod="dummy"  #common, effect, dummy, ortho (effect with unbalanced trial counts)
+mod="effect"  #common, effect, dummy, ortho (effect with unbalanced trial counts)
 rewrite=True
 root = Path("~/Data/ds005810")
 subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
 fwd_dir=Path("/Users/maryamvalian/Data/ds005810/derivatives/eelbrain/cache/raw")
 
+
+# %%
+#Global plot setting from https://eelbrain.readthedocs.io/en/stable/recipes.html
+# Configure the matplotlib figure style
+FONT = 'Arial'
+FONT_SIZE = 8
+RC = {
+    'figure.dpi': 100,
+    'savefig.dpi': 300,
+    'savefig.transparent': True,
+    # Font
+    'font.family': 'sans-serif',
+    'font.sans-serif': FONT,
+    'font.size': FONT_SIZE,
+    'figure.labelsize': FONT_SIZE,
+    'figure.titlesize': FONT_SIZE,
+    'axes.labelsize': FONT_SIZE,
+    'axes.titlesize': FONT_SIZE,
+    'xtick.labelsize': FONT_SIZE,
+    'ytick.labelsize': FONT_SIZE,    
+    'legend.fontsize': FONT_SIZE,
+}
+plt.rcParams.update(RC)
 
 # %% [markdown]
 # Noise Covariance:
@@ -148,6 +171,7 @@ def make_predictors_for_run(meg_ndvar, event_table,mod):
 # <bold>All Sessions and Runs</bold> 
 
 # %%
+
 for i in range(1, 31):                                      
     if (i>9):
         sessions=["ImageNet01"]
@@ -155,12 +179,12 @@ for i in range(1, 31):
         
     else:
         sessions=["ImageNet01", "ImageNet02","ImageNet03","ImageNet04"]
-        lastruns=[2,2,8,8]   #runs
+        lastruns=[2,2,8,8]
     
     subject = f"sub-{i:02d}"
     for idx, session in enumerate(sessions):
                 
-        modelfile = f"models/all_runs/{subject}-{session}-ncrf.pickle"
+        modelfile = f"models/all_runs/ncrf-ec/{subject}-{session}-ncrf.pickle"
         if os.path.exists(modelfile):
             print(f"{subject}-{session} model file exists.")
             continue
@@ -520,185 +544,363 @@ res = testnd.VectorDifferenceRelated(
 #save.pickle(res, f"Tests/all_runs/allruns-ncrf_PT.pickle")
 
 # %%
+diff = res.masked_difference()
+
+p = plot.Butterfly(diff.norm('space'), color='k', title='anim VS inanim')
+times = [110, 250, 350, 500]
+
+for t in times:
+    p.add_vline(t)
+
+for t in times:
+    f = plot.GlassBrain(diff.sub(time=t), title=f"anim vs inanim, {t} ms")
+    #f.plot_colorbar()
+
+
+# %%
+
+#---------------------------------
+y = diff.norm('space').max('source')
+
+fig = plt.figure(figsize=(6.5, 3.5))
+plt.plot(y.time.times, y.x, )    #color='k'
+
+for t in [118, 244, 359, 492]:
+    plt.axvline(t, color='k', linewidth=0.5)
+
+plt.title('Contrast: Animate-Inanimate')
+plt.xlabel('Time [ms]')
+plt.ylabel('maximum difference')
+plt.tight_layout()
+
+fig.figure.savefig("figures/contrast_BF_max.pdf",
+    bbox_inches="tight",
+    transparent=True
+)
+
+plt.show()
+
+# %%
+
+# %%
+from matplotlib import pyplot as plt
+from eelbrain import plot
+from PIL import Image
+import os
+
+# =========================
+# Global plot settings
+# =========================
+
+FONT = 'Arial'
+FONT_SIZE = 8
+LINEWIDTH = 0.5
+
+plt.rcParams.update({
+    'figure.dpi': 150,
+    'savefig.dpi': 300,
+    'savefig.transparent': True,
+
+    'font.family': 'sans-serif',
+    'font.sans-serif': FONT,
+    'font.size': FONT_SIZE,
+    'axes.labelsize': FONT_SIZE,
+    'axes.titlesize': FONT_SIZE,
+    'xtick.labelsize': FONT_SIZE,
+    'ytick.labelsize': FONT_SIZE,
+    'legend.fontsize': FONT_SIZE,
+
+    'axes.linewidth': LINEWIDTH,
+    'grid.linewidth': LINEWIDTH,
+    'lines.linewidth': LINEWIDTH,
+    'patch.linewidth': LINEWIDTH,
+    'xtick.major.width': LINEWIDTH,
+    'xtick.minor.width': LINEWIDTH,
+    'ytick.major.width': LINEWIDTH,
+    'ytick.minor.width': LINEWIDTH,
+})
+
+os.makedirs("figures/tmp", exist_ok=True)
+
+# =========================
+# Data
+# =========================
+
+diff = res.masked_difference()
+
+times = [110, 250, 350, 500]
+
+# =========================
+# Butterfly plot
+# =========================
+
+p = plot.Butterfly(
+    diff.norm('space'),
+    color='k',
+    title=None
+)
+
+for t in times:
+    p.add_vline(t)
+
+p.figure.suptitle(
+    "anim VS inanim",
+    fontsize=FONT_SIZE,
+    fontfamily=FONT,
+    y=0.98
+)
+
+p.figure.savefig(
+    "figures/contrast_butterfly.pdf",
+    bbox_inches="tight",
+    pad_inches=0.02,
+    transparent=True
+)
+
+plt.close(p.figure)
+
+# =========================
+# GlassBrain plots
+# =========================
+
+image_paths = []
+
+for t in times:
+
+    f = plot.GlassBrain(
+        diff.sub(time=t),
+        title=None,
+        w=5,
+        h=1.8
+    )
+
+    f.figure.suptitle(
+        f"anim vs inanim, {t} ms",
+        fontsize=FONT_SIZE,
+        fontfamily=FONT,
+        y=0.98
+    )
+
+    out = f"figures/tmp/contrast_gb_{t}.png"
+
+    f.figure.savefig(
+        out,
+        dpi=300,
+        bbox_inches="tight",
+        pad_inches=0.01,
+        transparent=False
+    )
+
+    plt.close(f.figure)
+
+    image_paths.append(out)
+
+# =========================
+# Stack GlassBrains vertically
+# =========================
+
+imgs = [Image.open(p).convert("RGB") for p in image_paths]
+
+width = max(img.width for img in imgs)
+height = sum(img.height for img in imgs)
+
+combined = Image.new("RGB", (width, height), "white")
+
+y = 0
+for img in imgs:
+    x = (width - img.width) // 2
+    combined.paste(img, (x, y))
+    y += img.height
+
+combined.save(
+    "figures/contrast_GBs.pdf",
+    "PDF",
+    resolution=300.0
+)
+
+print("Saved:")
+print("figures/contrast_butterfly.pdf")
+print("figures/contrast_GBs.pdf")
+
+# %%
 diff= res.masked_difference()
 p = plot.Butterfly(diff.norm('space'), color='k',title='anim VS inanim')
-times = [100,150,210,340,450,500,600]
+times = [110,250,350,500]
 for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(diff.sub(time=t),title=f"anim vs inan, {t}s")  
 
+# %%
+#ROI_mask
+
+# %%
+diff_250=diff.sub(time=250)
+
+
+d = diff_250.x  
+magnitude = np.linalg.norm(d, axis=1)
+
+threshold = np.percentile(magnitude, 95)
+ROI_mask = magnitude >= threshold
+
+
+roi_value = (diff_250 * ROI_mask).mean('space')
+
+
 # %% [markdown]
 # ## ONE Sample test
+
+# %%
 
 # %%
 data_inan = data_avg.sub("animacy == 'inanimate'")
 result_inan = testnd.Vector('ncrf', match='subject', data=data_inan, tfce=True, tstart=1, tstop=600,samples=1000)
 
 # %%
+y = result_inan.masked_difference().norm('space').max('source')
+
+fig, ax = plt.subplots(figsize=(6.5, 3.5))
+
+ax.plot(y.time.times, y.x, ) #color='k'
+
+for t in [130, 240]:
+    ax.axvline(t, color='k', linewidth=0.5)
+
+ax.set_title('Inanimate')
+ax.set_xlabel('Time [ms]')
+ax.set_ylabel('Maximum NCRF')
+
+fig.tight_layout()
+
+
+fig.figure.savefig("figures/Inanim_BF_max.pdf",
+    bbox_inches="tight",
+    transparent=True
+)
+plt.show()
+
+# %%
 p = plot.Butterfly(result_inan.masked_difference().norm('space'), color='k')
-times = [130,250,400]
+times = [130,250]
 for t in times:
     p.add_vline(t)
 for t in times:
     f = plot.GlassBrain(result_inan.masked_difference().sub(time=t),title=f"Inanimate, {t}s")  
 
 # %%
-data_an = data_avg.sub("animacy == 'animate'")
-result_an = testnd.Vector('ncrf', match='subject', data=data_an, tfce=True, tstart=100, tstop=600,samples=1000)
-result_an
-save.pickle((result_an,result_inan), f"Tests/ncrf/{mod}-ncrf_1samptest.pickle")
+from matplotlib import pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+from eelbrain import plot
 
-# %%
-result_anmag = result_an.masked_difference().norm('space')
-import mne
-import numpy as np
+times = [130, 250]
 
-# Extract the data (numpy array)
-data = result_anmag.x  # shape: (n_sources, n_times)
+# =========================
+# Save Butterfly separately
+# =========================
 
-# Get timing info
-tmin = float(result_anmag.time.tmin)
-tstep = float(result_anmag.time.tstep)
-
-# Identify whether it's volume or surface
-if 'source' in result_anmag.dimnames:
-    vertices = result_anmag.source.vertices
-else:
-    vertices = result_anmag.space.vertices
-
-# Create the SourceEstimate object
-stc = mne.SourceEstimate(
-    data,
-    vertices=vertices,
-    tmin=tmin,
-    tstep=tstep,
-    subject='fsaverage2'  # or your subject name
+p = plot.Butterfly(
+    result_inan.masked_difference().norm('space'),
+    color='k'
 )
 
-# ✅ Now you can plot it
-stc.plot(
-    subjects_dir=subjects_dir,
-    initial_time=0.12,
-    clim='auto'
+for t in times:
+    p.add_vline(t)
+
+p.figure.savefig(
+    "figures/inanim_butterfly.pdf",
+    bbox_inches="tight",
+    transparent=True
 )
 
+plt.close(p.figure)
+
+# =========================
+# Save all GlassBrains in one PDF
+# =========================
+
+with PdfPages("figures/inanim_glassbrains.pdf") as pdf:
+
+    for t in times:
+
+        f = plot.GlassBrain(
+            result_inan.masked_difference().sub(time=t),
+            title=f"Inanimate, {t} ms",
+            w=4,
+            h=3
+        )
+
+        pdf.savefig(
+            f.figure,
+            bbox_inches="tight",
+            transparent=True
+        )
+
+        plt.close(f.figure)
+
+print("Saved:")
+print("figures/inanim_butterfly.pdf")
+print("figures/inanim_glassbrains.pdf")
 
 # %%
-p = plot.Butterfly(result_an.masked_difference().norm('space'), color='k')
-times = [130,250,400]
-for t in times:
-    p.add_vline(t)
-for t in times:
-    f = plot.GlassBrain(result_an.masked_difference().sub(time=t),title=f"animate, {t}ms")  
+from matplotlib import pyplot as plt
+from eelbrain import plot
+from PIL import Image
+import os
 
-# %% [markdown]
-# ## Average
+os.makedirs("figures/tmp", exist_ok=True)
+
+times = [130, 250]
+image_paths = []
+
+# Save each GlassBrain as tightly cropped PNG first
+for t in times:
+    f = plot.GlassBrain(
+        result_inan.masked_difference().sub(time=t),
+        title=f"Inanimate, {t} ms",
+        w=5,
+        h=2.0
+    )
+
+    out = f"figures/tmp/glassbrain_{t}.png"
+
+    f.figure.savefig(
+        out,
+        dpi=300,
+        bbox_inches="tight",
+        pad_inches=0.02,
+        transparent=False
+    )
+
+    plt.close(f.figure)
+    image_paths.append(out)
+
+# Load cropped images
+imgs = [Image.open(p).convert("RGB") for p in image_paths]
+
+# Stack them vertically
+width = max(img.width for img in imgs)
+height = sum(img.height for img in imgs)
+
+combined = Image.new("RGB", (width, height), "white")
+
+y = 0
+for img in imgs:
+    x = (width - img.width) // 2
+    combined.paste(img, (x, y))
+    y += img.height
+
+# Save as one PDF
+combined.save(
+    "figures/inanim_glassbrains.pdf",
+    "PDF",
+    resolution=300.0
+)
+
+print("Saved: figures/inanim_glassbrains.pdf")
 
 # %%
-agg=data.aggregate('animacy', drop_bad=True)
-agg_in = agg.sub("animacy == 'inanimate'")
-agg_an = agg.sub("animacy == 'animate'")
-
-diff=agg_an['ncrf']- agg_in['ncrf']
-
-p = plot.Butterfly(diff.norm('space'), color='k')
-times = [0.12,0.17,0.28,0.45]
-for t in times:
-    p.add_vline(t)
-for t in times:
-    f = plot.GlassBrain(diff.sub(time=t),title=f"diff: animate-Inanimate, {t}s") 
-
-# %% [markdown]
-# # COMMON GROUP analysis
 
 # %%
-mod="common"
-
-# %%
-cases = []
-for i in range(1, 31):
-    if (i<10):
-        run="01"
-        session="ImageNet02"
-    elif i==22:
-        run="04"
-        session="ImageNet01" 
-    elif (i==11) or (i==30):
-        run="01"
-        session="ImageNet01"
-    elif i == 28:           
-        continue        
-    else:
-        run="05"
-        session="ImageNet01" 
-    
-    subject = f"sub-{i:02d}"
-    
-    morphed_file = f"models/ncrf/{mod}-{subject}-morphed.pickle"
-    
-    if os.path.exists(morphed_file):
-        print(f"Loading {subject} morphed model from file.")
-        common = load.unpickle(morphed_file)
-    else:
-                  
-        print(f"Morphing {subject}...")
-        model_file = f"models/ncrf/{mod}-{subject}.pickle"
-        model= load.unpickle(model_file)
-        hlist = model.h
-        
-        root = Path("~/Data/ds005810")
-        clean_fif = root / f"derivatives/preprocessed/raw/{subject}_ses-{session}_task-ImageNet_run-{run}_clean_meg.fif"
-        clean = mne.io.read_raw_fif(clean_fif, preload=True,verbose=False)
-        
-        src_file = f"{subjects_dir}/{subject}/bem/{subject}-vol-7-src.fif" #merged
-        src = mne.read_source_spaces(str(src_file),verbose=False)
-        
-        bem_sol_fif=f"{subjects_dir}/{subject}/bem/{subject}-bem-sol.fif"
-        bem_sol = mne.read_bem_solution(bem_sol_fif,verbose=False)
-        
-        
-        trans_fif= f"{root}/derivatives/trans/{subject}-{session}-trans.fif"
-        trans=mne.read_trans(trans_fif)
-        
-        fwd = mne.make_forward_solution(
-                clean.info, trans, src, bem_sol,
-                meg=True, eeg=False, mindist=0, verbose=False
-            )
-
-        
-        stc_common = ndvar_merged_to_stc_lr(
-        
-        ndvar=hlist,
-        fwd=fwd,
-        subject=subject,
-        subjects_dir=subjects_dir,
-        src_tag="vol-7")
-
-        _, _, common_fs = morph_hemi(
-        stc_common,
-        subject=subject,
-        subject_to="fsaverage2",
-        subjects_dir=subjects_dir,
-        src_tag="vol-7")
-
-        common= common_fs.smooth('source', 0.01, 'gaussian')
-        save.pickle(common, morphed_file)
-        
-    cases.append([subject, common])
-
-data_common = Dataset.from_caselist(['subject', 'ncrf'], cases)
-data_common.tail()        
-
-# %%
-result_common = testnd.Vector('ncrf', match='subject', data=data_common, tfce=True, tstart=10, tstop=60,samples=1000)  #NCRF time
-
-# %%
-p = plot.Butterfly(result_common.masked_difference().norm('space'), color='k')
-times = [13,25,35,45]
-for t in times:
-    p.add_vline(t)
-for t in times:
-    f = plot.GlassBrain(result_common.masked_difference().sub(time=t),title=f"common NCRF, {t/100}s") 
 
 # %%
