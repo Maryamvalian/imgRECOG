@@ -233,6 +233,11 @@ fig_after = plot_unlabeled_sources_on_mri(
     bad_label_ids=[0],
 )
 
+# %% [markdown]
+# # 3D brain plot ROI's
+
+# %%
+
 # %%
 src=anim.source.get_source_space()
 
@@ -1098,11 +1103,185 @@ roi_mask = np.isin(
 
 anim_roi_med = anim.copy()
 anim_roi_med.x[~roi_mask, :, :] = 0
-plot.GlassBrain(anim_roi_med.sub(time=110),title=f"Medial visual ROIms") 
+plot.GlassBrain(anim_roi_med.sub(time=110),title=f"ROI at 110 ms") 
+
+
+# %%
+plot.GlassBrain(anim.sub(time=110),title=f"Anim 110ms") 
+
+
+# %% [markdown]
+# # ROI 3D Plot
+
+# %%
+def plot_3d_volume_roi_sources(
+    source_label_names_used,
+    title="",
+    roi_labels=None,
+    color="red",
+    scale_factor=0.4,
+    alpha=0.5,
+):
+    brain = mne.viz.Brain(
+        subject,
+        hemi="both",
+        surf="white",
+        subjects_dir=subjects_dir,
+        background="white",
+        title=title,
+    )
+
+    brain.add_volume_labels(
+        aseg="aparc+aseg",
+        labels=roi_labels,
+        legend=False
+    )
+
+    coords = src[0]["rr"][src[0]["inuse"].astype(bool)]
+
+    if np.abs(coords).max() < 10:
+        coords = coords * 1000
+
+    roi_mask = np.isin(source_label_names_used, roi_labels)
+    roi_coords = coords[roi_mask]
+
+    print(f"{title}: {roi_coords.shape[0]} source points")
+
+    brain.add_foci(
+        roi_coords,
+        coords_as_verts=False,
+        hemi="vol",                                  #volume_based
+        color=color,
+        scale_factor=scale_factor,
+        alpha=alpha,
+    )
+    brain.show_view(                    #"ventral","dorsal","frontal","caudal","medial","lateral"
+        "ventral"
+    )
+
+    return brain, roi_coords
+#---------------
+roi_labels = [
+            #"ctx-lh-cuneus",
+            #"ctx-rh-cuneus",
+            "ctx-lh-lingual",
+            "ctx-rh-lingual",
+            #"ctx-lh-pericalcarine",
+            #"ctx-rh-pericalcarine",
+            #"ctx-lh-fusiform",
+            #"ctx-rh-fusiform",
+            #"ctx-lh-lateraloccipital",
+            #"ctx-rh-lateraloccipital",
+            #"ctx-lh-inferiortemporal",
+            #"ctx-rh-inferiortemporal",
+    
+    
+        ]
+
+
+brain_before, roi_coords_before = plot_3d_volume_roi_sources(
+    source_label_names,
+    roi_labels=roi_labels,
+    title="Before fixing",
+)
+
+brain_after, roi_coords_after = plot_3d_volume_roi_sources(
+    source_label_names_fixed,
+    roi_labels=roi_labels,
+    title="After fixing",
+)
+
 
 # %%
 
 # %%
-plot.GlassBrain(anim.sub(time=110),title=f"Anim ms") 
+def plot_3d_volume_roi_sources_lh(
+    source_label_names_used,
+    title="",
+    roi_labels=None,
+    color="red",
+    scale_factor=0.4,
+    alpha=0.5,
+    view="ventral",
+):
+    # keep only left-hemi labels
+    roi_labels_lh = [lab for lab in roi_labels if lab.startswith("ctx-rh-")]
+
+    brain = mne.viz.Brain(
+        subject,
+        hemi="rh",
+        surf="white",
+        subjects_dir=subjects_dir,
+        background="white",
+        title=title,
+    )
+
+    brain.add_volume_labels(
+        aseg="aparc+aseg",
+        labels=roi_labels_lh,
+        legend=False,
+    )
+
+    coords = src[0]["rr"][src[0]["inuse"].astype(bool)]
+
+    # convert m to mm if needed
+    if np.abs(coords).max() < 10:
+        coords = coords * 1000
+
+    source_label_names_used = np.asarray(source_label_names_used).astype(str)
+
+    # select ROI labels
+    roi_mask = np.isin(source_label_names_used, roi_labels_lh)
+
+    # extra safety: keep only anatomical left hemisphere
+    # FreeSurfer RAS: left hemisphere has x < 0
+    lh_mask = coords[:, 0] < 0
+
+    final_mask = roi_mask & lh_mask
+    roi_coords = coords[final_mask]
+
+    print(f"{title}: {roi_coords.shape[0]} LH source points")
+    print("x range:", roi_coords[:, 0].min(), roi_coords[:, 0].max())
+
+    brain.add_foci(
+        roi_coords,
+        coords_as_verts=False,
+        hemi="vol",
+        color=color,
+        scale_factor=scale_factor,
+        alpha=alpha,
+    )
+
+    brain.show_view(view)
+
+    return brain, roi_coords
+
+
+# %%
+roi_labels = [
+    #"ctx-lh-cuneus",
+    #"ctx-rh-cuneus",
+    "ctx-lh-lingual",
+    "ctx-rh-lingual",
+    #"ctx-lh-pericalcarine",
+    #"ctx-rh-pericalcarine",
+]
+"""
+brain_before, roi_coords_before = plot_3d_volume_roi_sources_lh(
+    source_label_names,
+    roi_labels=roi_labels,
+    title="Before fixing",
+    color="red",
+    view="ventral",
+)
+
+"""
+brain_after, roi_coords_after = plot_3d_volume_roi_sources_lh(
+    source_label_names_fixed,
+    roi_labels=roi_labels,
+    title="After fixing",
+    color="red",
+    view="ventral",
+)
 
 # %%
