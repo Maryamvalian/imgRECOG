@@ -16,6 +16,7 @@
 import sys
 from pathlib import Path
 import numpy as np
+from matplotlib import pyplot
 
 sys.path.append(str(Path.cwd().parent))
 from ncrf_dataset import *
@@ -29,7 +30,7 @@ subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expan
 
 # Configure the matplotlib figure style
 FONT = 'Arial'
-FONT_SIZE = 8
+FONT_SIZE = 14
 RC = {
     'figure.dpi': 100,
     'savefig.dpi': 300,
@@ -46,7 +47,6 @@ RC = {
     'ytick.labelsize': FONT_SIZE,    
     'legend.fontsize': FONT_SIZE,
 }
-pyplot.rcParams.update(RC)
 
 # Load ncrf models
 data_ec = create_ncrf_dataset(mod="effect", path="../models/all_runs/ncrf-ec") 
@@ -100,5 +100,8 @@ fig=Plot_vol2surf(
     x, subject="fsaverage2",
     title="Aggregation NCRF-DC",
     save="figures/Aggregation NCRF-DC",
+    RC=RC
 )
 
+
+# %%
