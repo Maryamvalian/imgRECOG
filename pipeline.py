@@ -13,19 +13,13 @@
 # ---
 
 # %%
-import mne
-import pandas as pd
-import numpy as np
-#from mne import *
-from ncrf import fit_ncrf
-from eelbrain import NDVar, UTS
-from eelbrain import plot, combine
-from eelbrain import *
-from eelbrain._data_obj import VolumeSourceSpace
 import os
 from pathlib import Path
+import mne
+import numpy as np
+from ncrf import fit_ncrf
+from eelbrain import NDVar, UTS
 from volmorph import *
-from matplotlib import pyplot as plt
 
 # %%
 # Data locations
@@ -41,9 +35,6 @@ raw_er.filter(1., 40., phase="zero-double", verbose=False)
 raw_er.resample(100, npad="auto", verbose=False)
 noise_cov = mne.compute_raw_covariance(raw_er, method='shrunk', rank=None,verbose=False)
 
-
-# %% [markdown]
-# Functions definition
 
 # %%
 def compute_fwd_ndvar(subject, session,subject_dir,meg_info,sensor):
@@ -127,9 +118,10 @@ def allruns_fit(mod, model_dir):
             lastruns = [5]                     #run01,run02,..,run05      
             
         else:
+            
             sessions = ["ImageNet01","ImageNet02","ImageNet03","ImageNet04"] 
-            lastruns = [2,2,8,8]        #[2,2,8,8]
-        
+            lastruns = [2,2,8,8]       
+            
         subject = f"sub-{i:02d}"
         for idx, session in enumerate(sessions):
                     
@@ -184,13 +176,13 @@ def morph_all(mod, path):
             lastruns = [5]                       
         else:
             
-            sessions=["ImageNet03"]
-            lastruns=[8]
-        
+            sessions = ["ImageNet01","ImageNet02","ImageNet03","ImageNet04"] 
+            lastruns = [2,2,8,8] 
+            
         subject = f"sub-{i:02d}"
         for idx, session in enumerate(sessions):
                     
-            morphed_file = f"{path}/M{subject}-{session}-ncrf.pickle"  #M stands for Morphed
+            morphed_file = f"{path}/M{subject}-{session}-ncrf.pickle"  # Morphed
             if os.path.exists(morphed_file):
                 print(f"Morphed {subject}-{session} Exists.")
             else:
@@ -263,3 +255,5 @@ allruns_fit(mod="dummy", model_dir = "models/all_runs/ncrf-dc")
 # Morph all subjects to fsaverage
 morph_all(mod="dummy", path="models/all_runs//morphed")
 morph_all(mod="effect", path="models/all_runs/ncrf-ec")
+
+# %%
