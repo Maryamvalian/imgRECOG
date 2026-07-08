@@ -3,26 +3,21 @@ import numpy as np
 import nibabel as nib
 import mne
 import matplotlib.pyplot as plt
-from pathlib import Path
-
 from nilearn import datasets, surface, plotting
 from nilearn.image import smooth_img
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize, LinearSegmentedColormap
 
 
-root = Path("~/Data/ds005810")
-subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
-
 def vol_stc_to_img(
     x,                           
     subject="fsaverage2",
+    subjects_dir="",
     scale=1e12,
 ):
     """
-    Converts volume source-time course (STC) to a Nifti Image.
-    Since MEG values are very small, they use scale.
-    x: volume-based STC
+    Converts volume source to a Nifti Image. 
+    x: a volume-based estimate with one value per source point 
     """
     x = np.asarray(x).ravel() * scale
 
@@ -61,16 +56,19 @@ def vol_stc_to_img(
 def volume_to_surface_textures(
     x,
     subject="fsaverage2",
+    subjects_dir="",
     scale=1e12,
     smooth_fwhm=8,
     radius=7,
 ):
     """
-    Convert a volume-based source estimate (x) into surface values that can be plotted on the cortical surface (texture_left, texture_right).
+    Convert a volume-based source estimate (x) into surface values that can be plotted on 
+    the cortical surface (texture_left, texture_right).
     """
     meg_img = vol_stc_to_img(
         x,
         subject=subject,
+        subjects_dir=subjects_dir,
         scale=scale,
     )
 
@@ -235,6 +233,7 @@ def Plot_vol2surf(
     x,
     title="",
     subject="fsaverage2",
+    subjects_dir="",
     scale=1e12,
     smooth_fwhm=8,
     radius=7,
@@ -246,6 +245,7 @@ def Plot_vol2surf(
     texture_left, texture_right, fsaverage = volume_to_surface_textures(
         x,
         subject=subject,
+        subjects_dir=subjects_dir,
         scale=scale,
         smooth_fwhm=smooth_fwhm,
         radius=radius,

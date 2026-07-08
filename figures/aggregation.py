@@ -20,13 +20,14 @@ from matplotlib import pyplot
 
 sys.path.append(str(Path.cwd().parent))
 from ncrf_dataset import *
-sys.path.append(str(Path.cwd().parent))
 from vol2surf import *
 
 # %%
 # Data locations
-root = Path("~/Data/ds005810")
 subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
+model_dir = Path("../models/all_runs")
+dc_dir = model_dir / "morphed"
+ec_dir = model_dir / "ncrf-ec"
 
 # Configure the matplotlib figure style
 FONT = 'Arial'
@@ -49,32 +50,14 @@ RC = {
 }
 
 # Load ncrf models
-data_ec = create_ncrf_dataset(mod="effect", path="../models/all_runs/ncrf-ec") 
-data_dc = create_ncrf_dataset(mod="dummy", path="../models/all_runs/morphed") 
+data_ec = create_ncrf_dataset(mod="effect", path=ec_dir) 
+data_dc = create_ncrf_dataset(mod="dummy", path=dc_dir) 
 
 # Statistical Tests
-animate_data = data_dc.sub("animacy == 'animate'")
-inanimate_data = data_dc.sub("animacy == 'inanimate'")
-
-result_anim = testnd.Vector(
-    'ncrf',
-    match='subject',
-    data=animate_data,
-    tfce=True,
-    tstart=80,
-    tstop=600,
-    samples=1000
-)
-
-result_inanim = testnd.Vector(
-    'ncrf',
-    match='subject',
-    data=inanimate_data,
-    tfce=True,
-    tstart=80,
-    tstop=600,
-    samples=1000
-)
+result_anim = ncrf_stats(data=data_dc,comparison="condition",
+                         mod="dummy", condition="animate",)
+result_inanim = ncrf_stats(data=data_dc, comparison="condition",
+                           mod="dummy", condition="inanimate",)
 
 # Keep significants
 anim_sig = result_anim.masked_difference().sub(time=(0,400))
@@ -97,7 +80,8 @@ x = anim_norm - inanim_norm
 
 # Plot volume on the surface
 fig=Plot_vol2surf(
-    x, subject="fsaverage2",
+    x, subject="fsaverage2", 
+    subjects_dir=subjects_dir,
     title="Aggregation NCRF-DC",
     save="figures/Aggregation NCRF-DC",
     RC=RC
