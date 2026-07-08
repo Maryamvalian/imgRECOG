@@ -88,7 +88,8 @@ def load_meg_ndvar(subject, session, run):
     
 
 def make_predictors_for_run(meg_ndvar, event_table,mod):
-
+    
+    # create stimululs with two different encoding mod : "dummy" or "effect"
     sfreq = 100  #meg_ndvar.info['sfreq']     #100       
     n_times = len(meg_ndvar.time)        #32000     
     
@@ -105,24 +106,11 @@ def make_predictors_for_run(meg_ndvar, event_table,mod):
                     stim2[idx]= 1.0
                 else:
                     stim1[idx]= 1.0
-                    
-            elif mod=='common':
-                
-                stim1[idx] = 1.0
                 
             elif mod=='effect':
                 
                 stim1[idx] = 1.0
                 stim2[idx] = 1.0 if is_anim else -1.0
-
-            elif mod=='ortho':
-                
-                n_a =int(event_table['animate'].sum())
-                n_i =int((~event_table['animate']).sum())
-                N=n_a+n_i
-                code_anim,code_inanim = (n_i / N),-(n_a / N)
-                stim1[idx]= 1.0
-                stim2[idx]= code_anim if is_anim else code_inanim
                     
     stim1 = NDVar(stim1, time)
     stim2 = NDVar(stim2, time)
