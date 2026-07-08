@@ -241,6 +241,7 @@ def Plot_vol2surf(
     threshold_ratio=0.10,
     views=("lateral", "ventral", "medial"),
     save=None,
+    RC={},
 ):
     texture_left, texture_right, fsaverage = volume_to_surface_textures(
         x,
