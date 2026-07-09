@@ -5,6 +5,7 @@ import mne
 import matplotlib.pyplot as plt
 from nilearn import datasets, surface, plotting
 from nilearn.image import smooth_img
+#from matplotlib.image import imread
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize, LinearSegmentedColormap
 
@@ -140,13 +141,27 @@ def get_surface_plot_params(
             ],
             N=256,
         )
-
     else:
         vmax = max(abs(xmin), abs(xmax))
         vmin = -vmax
         threshold = threshold_ratio * vmax
-        cmap = "cold_hot"
-
+    
+        cmap = plt.get_cmap("cold_hot").copy()
+    
+        colors = cmap(np.linspace(0, 1, 256))
+    
+        # location of ±threshold in the colormap
+        center = 128
+        half_width = int(128 * threshold / vmax)
+    
+        colors[
+            center-half_width:center+half_width+1
+        ] = [0.85, 0.85, 0.85, 1.0]   # light gray
+    
+        cmap = LinearSegmentedColormap.from_list(
+            "cold_hot_threshold",
+            colors
+        )
     if abs(vmax - vmin) <= eps:
         raise ValueError("Values are too small after projection.")
 
@@ -171,7 +186,7 @@ def plot_surface_views(
     fig, axes = plt.subplots(
         len(views),                          #row: number of view
         2,                                    #column= 2 (l,R)
-        figsize=(8, 3.6 * len(views)),
+        figsize=(6, 3.0 * (len(views))),
         subplot_kw={"projection": "3d"},
     )
 
@@ -211,6 +226,10 @@ def plot_surface_views(
 
     fig.suptitle(title, fontsize=16)
     plt.tight_layout(rect=[0, 0, 0.9, 0.96])
+    fig.subplots_adjust(
+    wspace=-0.06,   # horizontal space
+    hspace=-0.06    # vertical space
+)
 
     #color_bar
     norm = Normalize(vmin=vmin, vmax=vmax)
@@ -218,7 +237,8 @@ def plot_surface_views(
     sm.set_array([])
     cax = fig.add_axes([0.92, 0.12, 0.02, 0.20]) #colorbar location
     fig.colorbar(sm, cax=cax)
-
+    
+    
     if save is not None:
         os.makedirs(os.path.dirname(save), exist_ok=True)
         fig.savefig(f"{save}.png", dpi=300, bbox_inches="tight")
