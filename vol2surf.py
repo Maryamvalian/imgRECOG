@@ -5,7 +5,6 @@ import mne
 import matplotlib.pyplot as plt
 from nilearn import datasets, surface, plotting
 from nilearn.image import smooth_img
-#from matplotlib.image import imread
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize, LinearSegmentedColormap
 

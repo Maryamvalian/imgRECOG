@@ -19,7 +19,7 @@ import numpy as np
 from matplotlib import pyplot
 
 sys.path.append(str(Path.cwd().parent))
-from ncrf_dataset import *
+from ncrf_analysis import *
 from vol2surf import *
 
 # %%
@@ -78,14 +78,15 @@ inanim_norm = (inanim_x - inanim_x.min()) / (inanim_x.max() - inanim_x.min())
 # Animacy Contrast
 x = anim_norm - inanim_norm
 
+# %%
 # Plot volume on the surface
 fig=Plot_vol2surf(
     x, subject="fsaverage2", 
     subjects_dir=subjects_dir,
     title="Aggregation NCRF-DC",
     save="figures/Aggregation NCRF-DC",
+    threshold_ratio=0.05,
     RC=RC
 )
-
 
 # %%

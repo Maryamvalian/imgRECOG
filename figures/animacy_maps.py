@@ -21,7 +21,7 @@ from matplotlib.ticker import FuncFormatter
 from matplotlib.image import imread
 import matplotlib as mpl
 sys.path.append(str(Path.cwd().parent))
-from ncrf_dataset import *
+from ncrf_analysis import *
 
 
 # %%
