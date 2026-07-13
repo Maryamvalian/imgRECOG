@@ -2,7 +2,7 @@ from scipy.stats import t
 import numpy as np
 
 
-def loftus_masson_ci(data, confidence=0.95):
+def loftus_masson(data, confidence=0.95):
     
     """
     Compute Loftus-Masson within-subject confidence intervals.
