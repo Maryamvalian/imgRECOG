@@ -43,7 +43,9 @@ Run FreeSurfer's `recon-all` for each subject to generate the anatomical surface
 
 ### 3. Create forward model
 
-Run
+- Create the fiducials manually using the MNE graphical user interface (GUI). These fiducials are required for MEG-MRI coregistration and subsequent forward model computation.
+
+- Run
 
 ```text
 Setup_subjects.py
