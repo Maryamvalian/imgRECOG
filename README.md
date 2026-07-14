@@ -12,7 +12,7 @@ This project uses the **NOD-MEG** dataset available on OpenNeuro:
 
 **Dataset:** NOD-MEG (ds005810)
 
-https://openneuro.org/datasets/ds005810
+📥 https://openneuro.org/datasets/ds005810
 
 Download the complete dataset, including:
 
@@ -41,9 +41,9 @@ Download the complete NOD-MEG dataset (including MRI) from OpenNeuro.
 
 Run FreeSurfer's `recon-all` for each subject to generate the anatomical surfaces.
 
-### 3. Create forward model
+### 3. Prepare subjects
 
-- Create the fiducials manually using the MNE graphical user interface (GUI). These fiducials are required for MEG-MRI coregistration and subsequent forward model computation.
+- Define and save the anatomical fiducial points manually using the MNE coregistration GUI.
 
 - Run
 
@@ -54,10 +54,13 @@ Setup_subjects.py
 to generate
 
 - BEM solution
-- Forward solution
 - Source space
 
-for every subject.
+for every subject. The generated files include:
+
+sub-XX-bem-sol.fif
+sub-XX-<session>-trans.fif
+sub-XX-vol-7-src.fif
 
 ### 4. Estimate NCRFs
 
@@ -111,4 +114,11 @@ The project relies on several Python packages, including
 
 Additional dependencies may be required depending on your environment.
 
+---
 
+## Citation
+
+If you use this repository in your research, please cite:
+
+- The NOD-MEG OpenNeuro dataset.
+- This repository.
