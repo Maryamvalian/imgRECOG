@@ -12,7 +12,7 @@ This project uses the **NOD-MEG** dataset available on OpenNeuro:
 
 **Dataset:** NOD-MEG (ds005810)
 
-📥 https://openneuro.org/datasets/ds005810
+https://openneuro.org/datasets/ds005810
 
 Download the complete dataset, including:
 
