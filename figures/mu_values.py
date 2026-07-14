@@ -25,6 +25,8 @@ from scipy.stats import ttest_1samp
 import pandas as pd
 import seaborn as sns
 
+from scipy.stats import shapiro
+
 
 # %%
 
@@ -139,7 +141,14 @@ mu_ratio = mu_ec / mu_dc
 log_ratio = np.log(mu_ratio)
 #t-test on log-transformed ratio
 t, p = ttest_1samp(log_ratio, popmean=0)           #muEC=muDC => mu ratio=1 log(mu ratio)=0
-print(f"t = {t:.3f}, p = {p:.5f}")
+print(f"t-test on log_ratio : t = {t:.3f}, p = {p:.5f}")
+
+# H0: The data are normally distributed 
+# if p < 0.001 we can reject H0
+
+W, p = shapiro(log_ratio) # W = 0 far from normal, w = 1 very close to normal
+
+print(f"Shapiro-wilk Test reaults : normality score W = {W:.3f} , p = {p:.3e}")
 
 # %%
 # plot 
@@ -202,11 +211,25 @@ plt.tight_layout()
 plt.show()
 
 # %%
+from eelbrain import Dataset, Var, Factor
 
+n = len(mu_ec)
 
+data = Dataset()
+data["subject"] = Factor(np.repeat(np.arange(n), 2), random=True)
+data["model"] = Factor(["EC", "DC"] * n)
+data["mu"] = Var(np.ravel(np.column_stack([mu_ec, mu_dc])))
+mu_test = WilcoxonSignedRank(
+    y="mu",
+    x="model",
+    c1="EC",
+    c0="DC",
+    match="subject",
+    data=data,
+    tail=0,
+)
 
-
-
-
+print(mu_test)
+print(f"{mu_test.p:.3e}")
 
 # %%
