@@ -2,13 +2,10 @@
 # Ignore everything
 *
 
-# But not .gitignore
+# Allow 
 !.gitignore
-
-# Allow Python files
 !*.py
-
-# Allow subdirectories (so Python files inside them are not blocked)
+!*.md
 !*/
 
 .ipynb_checkpoints/
