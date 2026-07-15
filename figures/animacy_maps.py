@@ -27,7 +27,7 @@ from ncrf_analysis import *
 # %%
 # Data locations
 model_dir = Path("../models/all_runs")
-dc_dir = model_dir / "morphed"
+dc_dir = model_dir / "ncrf-dc"
 ec_dir = model_dir / "ncrf-ec"
 
 # Where to save the figure
