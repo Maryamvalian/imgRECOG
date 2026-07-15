@@ -19,11 +19,11 @@ import mne
 import numpy as np
 from ncrf import fit_ncrf
 from eelbrain import NDVar, UTS
-from volmorph import *
+from utils import *
 
 # %%
 # Data locations
-root = Path("~/Data/ds005810")
+root = Path("~/Data/ds005810").expanduser()
 subjects_dir = root /"derivatives"/"freesurfer"/"subjects"
 fwd_dir = root /"derivatives"/ "eelbrain"/"cache"/"raw"
 
@@ -109,26 +109,12 @@ def make_predictors_for_run(meg_ndvar, event_table,mod):
     return stim1,stim2
 
 
-def allruns_fit(mod, model_dir):
-
-    
-    for i in range(1, 31):                                   
-        if (i>9):
-            sessions=["ImageNet01"]             # all subjects>9 have 1 session of length 5 runs.
-            lastruns = [5]                     #run01,run02,..,run05      
-            
-        else:
-            
-            sessions = ["ImageNet01","ImageNet02","ImageNet03","ImageNet04"] 
-            lastruns = [2,2,8,8]       
-            
-        subject = f"sub-{i:02d}"
-        for idx, session in enumerate(sessions):
-                    
+def fit_subject(subject, subject_dir,session,runs , mod, model_dir):
+      
             modelfile = f"{model_dir}/{subject}-{session}-ncrf.pickle"
             if os.path.exists(modelfile):
                 print(f"{mod}-{subject}-{session} model file exists.")
-                continue
+                return
             try:
                 
                 print(f"computing fwd for {subject}-{session}... ")
@@ -139,12 +125,7 @@ def allruns_fit(mod, model_dir):
                 meg_ndvar = load.fiff.raw_ndvar(clean)
                 sensor=meg_ndvar.sensor
                 fwd = compute_fwd_ndvar(subject, session,subjects_dir,info,sensor)
-    
-                
-                lastrun= lastruns[idx]
-                if (i==4) and ((session=="ImageNet04")):   #check: make_event :raw file doesnt provided by openneuro
-                    lastrun=5
-                runs = [f"{i:02d}" for i in range(1, lastrun+1)] 
+        
                 meg_all = []
                 stim_all = []
                 for run in runs:
@@ -168,28 +149,17 @@ def allruns_fit(mod, model_dir):
              print(f"\n----------- Error processing {subject}: {e}\n")  
 
 
-def morph_all(mod, path, first=1, last=31):
+def morph_subject(subject, subject_dir,session,mod, model_dir):
     
-    for i in range(first, last):                                      
-        if (i>9):
-            sessions=["ImageNet01"]
-            lastruns = [5]                       
-        else:
-            
-            sessions = ["ImageNet01","ImageNet02","ImageNet03","ImageNet04"] 
-            lastruns = [2,2,8,8] 
-            
-        subject = f"sub-{i:02d}"
-        for idx, session in enumerate(sessions):
                     
-            morphed_file = f"{path}/M{subject}-{session}-ncrf.pickle"  # Morphed
+            morphed_file = f"{model_dir}/M{subject}-{session}-ncrf.pickle"  # Morphed
             if os.path.exists(morphed_file):
-                print(f"Morphed {subject}-{session} Exists.")
+                print(f"Morphed {mod} {subject}-{session} Exists.")
             else:
                 try:
                     
                     print(f"Morphing {subject}-{session}...")
-                    modelfile = f"{path}/{subject}-{session}-ncrf.pickle"
+                    modelfile = f"{model_dir}/{subject}-{session}-ncrf.pickle"
                     model = load.unpickle(modelfile)
                     hlist = model.h
                     inanim,anim = hlist[0],hlist[1]       # if mod is effect : anim: contrast, inanim: general
@@ -248,14 +218,27 @@ def morph_all(mod, path, first=1, last=31):
 # # Main
 
 # %%
-# Fit NCRF models for Effect and Dummy encoding    
-first,last= 1,31           # which subjects? 1 to 31 : all subjects 
-allruns_fit(mod="effect", model_dir = "models/all_runs/ncrf-ec/reduce", first = first, last = last)
-allruns_fit(mod="dummy", model_dir = "models/all_runs/ncrf-dc", first = first, last = last)
+for i in range(1, 31):          # Subjects                              
+        if (i>9):
+            sessions=["ImageNet01"]             # all subjects>9 have 1 session of length 5 runs.
+            lastruns = [5]                     #run01,run02,..,run05      
+            
+        else:
+            
+            sessions = ["ImageNet01","ImageNet02","ImageNet03","ImageNet04"] 
+            lastruns= [2,2,8,8]      
+            
+        subject = f"sub-{i:02d}"
+        for idx, session in enumerate(sessions):
+            
+            lastrun= lastruns[idx]          
+            runs = [f"{i:02d}" for i in range(1, lastrun+1)] 
+            
+            fit_subject(subject=subject, subject_dir=subjects_dir, mod="dummy",session= session, runs= runs, model_dir="models/all_runs//ncrf-dc")
+            fit_subject(subject=subject, subject_dir=subjects_dir, mod="effect",session= session, runs= runs, model_dir="models/all_runs//ncrf-ec")
 
-# Morph all subjects to fsaverage
-morph_all(mod="dummy", path="models/all_runs//morphed" , first = first, last = last)
-morph_all(mod="effect", path="models/all_runs/ncrf-ec", first = first, last = last)
+            morph_subject(subject=subject, subject_dir=subjects_dir, mod="dummy",session= session, model_dir="models/all_runs//ncrf-dc")
+            morph_subject(subject=subject, subject_dir=subjects_dir, mod="effect",session= session, model_dir="models/all_runs//ncrf-ec")
 
 # %%
 
