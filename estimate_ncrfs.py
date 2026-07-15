@@ -23,10 +23,10 @@ from volmorph import *
 
 # %%
 # Data locations
-rewrite=True
 root = Path("~/Data/ds005810")
-subjects_dir = str(Path('~/Data/ds005810/derivatives/freesurfer/subjects').expanduser())
-fwd_dir=Path("/Users/maryamvalian/Data/ds005810/derivatives/eelbrain/cache/raw")
+subjects_dir = root /"derivatives"/"freesurfer"/"subjects"
+fwd_dir = root /"derivatives"/ "eelbrain"/"cache"/"raw"
+
 
 # Noise Covariance
 empty_room=root/"sub-emptyroom/ses-20211114/meg/sub-emptyroom_ses-20211114_task-noise_meg.fif"
@@ -168,9 +168,9 @@ def allruns_fit(mod, model_dir):
              print(f"\n----------- Error processing {subject}: {e}\n")  
 
 
-def morph_all(mod, path):
+def morph_all(mod, path, first=1, last=31):
     
-    for i in range(1, 31):                                      
+    for i in range(first, last):                                      
         if (i>9):
             sessions=["ImageNet01"]
             lastruns = [5]                       
@@ -248,12 +248,17 @@ def morph_all(mod, path):
 # # Main
 
 # %%
-# Fit NCRF models for Effect and Dummy encoding               
-allruns_fit(mod="effect", model_dir = "models/all_runs/ncrf-ec/reduce")
-allruns_fit(mod="dummy", model_dir = "models/all_runs/ncrf-dc")
+# Fit NCRF models for Effect and Dummy encoding    
+first,last= 1,31           # which subjects? 1 to 31 : all subjects 
+allruns_fit(mod="effect", model_dir = "models/all_runs/ncrf-ec/reduce", first = first, last = last)
+allruns_fit(mod="dummy", model_dir = "models/all_runs/ncrf-dc", first = first, last = last)
 
 # Morph all subjects to fsaverage
-morph_all(mod="dummy", path="models/all_runs//morphed")
-morph_all(mod="effect", path="models/all_runs/ncrf-ec")
+morph_all(mod="dummy", path="models/all_runs//morphed" , first = first, last = last)
+morph_all(mod="effect", path="models/all_runs/ncrf-ec", first = first, last = last)
+
+# %%
+
+# %%
 
 # %%
