@@ -33,7 +33,7 @@ from scipy.stats import shapiro
 # Data locations
 base_dir = Path("../models/all_runs")
 dc_dir = base_dir / "ncrf-dc"
-ec_dir = base_dir / "ncrf-ec" / "reduce"
+ec_dir = base_dir / "ncrf-ec" 
 
 # Where to save the figure
 fig_dir = Path("figures")
