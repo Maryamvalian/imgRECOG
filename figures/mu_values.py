@@ -17,19 +17,12 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from eelbrain import load
-
 from eelbrain import Var
 from eelbrain.test import WilcoxonSignedRank
-from scipy.stats import ttest_1samp
-
 import pandas as pd
 import seaborn as sns
 
-from scipy.stats import shapiro
-
-
 # %%
-
 # Data locations
 base_dir = Path("../models/all_runs")
 dc_dir = base_dir / "ncrf-dc"
@@ -84,29 +77,73 @@ def get_subject_mu(model_dir):
 mu_dc = get_subject_mu(dc_dir)
 mu_ec = get_subject_mu(ec_dir)
 
+# Mu Ratio
+mu_ratio = mu_ec / mu_dc
 
-# Plot
+# Log trnasform of ratio
+log_ratio = np.log(mu_ratio)
+
+# %%
+# Plot Mu values + log transformed Mu ratio
 x = np.arange(1, 31)
 
-plt.figure(figsize=(12, 5))
+# Sort subjects by EC mu values 
+order = np.argsort(mu_ec)
+mu_ec_sorted = mu_ec[order]
+mu_dc_sorted = mu_dc[order]
 
-plt.plot(x, mu_ec, "^", label="NCRF-EC")
-plt.plot(x, mu_dc, "s", label="NCRF-DC")
+df = pd.DataFrame({
+    "Model": ["Subjects"] * len(log_ratio),
+    "Ratio": log_ratio,
+})
 
-plt.xticks(x)
-plt.xlabel("Subject")
-plt.ylabel("Mu Values")
+fig, axes = plt.subplots(1, 2, figsize=(8, 7), width_ratios=[1.3, 1])
 
-plt.yscale("log")
-plt.grid(True, alpha=0.4)
+# Plot Mu values
+ax = axes[0]
 
-plt.legend(
-    loc="upper left",
-    bbox_to_anchor=(1.02, 1),
+ax.plot(mu_ec_sorted, x, "^", label="NCRF-EC")
+ax.plot(mu_dc_sorted, x, "s", label="NCRF-DC")
+
+ax.set_xlabel(r"$\mu$ Value")
+ax.set_ylabel("Subjects")
+
+ax.set_xscale("log")
+ax.grid(True, alpha=0.4)
+
+ax.legend(loc="upper right")
+
+ax.set_yticks(np.arange(1, 31))
+ax.set_yticklabels([])
+ax.invert_yaxis()
+
+ax.set_title("A)")
+
+# Plot Mu ratio
+ax = axes[1]
+
+sns.swarmplot(
+    data=df,
+    x="Model",
+    y="Ratio",
+    size=8,
+    ax=ax,
+    color="green"
 )
 
+ax.axhline(0, color="red", linestyle="--", linewidth=1.5)
+
+ax.set_ylabel(r"$\ln(\mu_{EC}/\mu_{DC})$")
+
+
+ax.grid(axis="y", alpha=0.3)
+ax.set_xlabel("Subjects")
+ax.set_xticklabels([])
+
+ax.set_title("B)")
+
 plt.tight_layout()
-plt.savefig(fig_file)
+plt.savefig(fig_dir / "mu.pdf")
 plt.show()
 
 # %% [markdown]
@@ -134,102 +171,5 @@ print(
 )
 
 # %%
-# Mu Ratio
-mu_ratio = mu_ec / mu_dc
-
-# Log trnasform of ratio
-log_ratio = np.log(mu_ratio)
-#t-test on log-transformed ratio
-t, p = ttest_1samp(log_ratio, popmean=0)           #muEC=muDC => mu ratio=1 log(mu ratio)=0
-print(f"t-test on log_ratio : t = {t:.3f}, p = {p:.5f}")
-
-# H0: The data are normally distributed 
-# if p < 0.001 we can reject H0
-
-W, p = shapiro(log_ratio) # W = 0 far from normal, w = 1 very close to normal
-
-print(f"Shapiro-wilk Test reaults : normality score W = {W:.3f} , p = {p:.3e}")
-
-# %%
-# plot 
-x = np.arange(1, 31)
-plt.figure(figsize=(12, 6))
-
-plt.plot(
-    x,
-    mu_ratio,
-    "o",
-    markersize=10,
-    label=r"mu ratio"
-)
-
-plt.axhline(
-    1,
-    linestyle="--",
-    color="black",
-    label="EC = DC"
-)
-
-plt.xticks(x)
-plt.xlabel("Subject")
-plt.ylabel(r"$\mu_{EC}/\mu_{DC}$")
-
-plt.grid(True, alpha=0.3)
-
-plt.legend()
-plt.tight_layout()
-
-#plt.yscale("log")
-plt.axhline(1, color="black", linestyle="--")
-plt.show()
-
-# %%
-# Swarm plot 
-df = pd.DataFrame({
-    "Model": ["Subjects"] * len(mu_ratio),
-    "Ratio": mu_ratio,
-})
-
-plt.figure(figsize=(4, 5))
-
-sns.swarmplot(
-    data=df,
-    x="Model",
-    y="Ratio",
-    size=8,
-)
-
-plt.axhline(1, color="red", linestyle="--", linewidth=1.5)
-
-plt.ylabel(r"Mu Ratio (EC/DC)")
-plt.xlabel("")
-
-plt.yscale("log")  
-
-plt.grid(axis="y", alpha=0.3)
-plt.tight_layout()
-plt.show()
-
-# %%
-from eelbrain import Dataset, Var, Factor
-
-n = len(mu_ec)
-
-data = Dataset()
-data["subject"] = Factor(np.repeat(np.arange(n), 2), random=True)
-data["model"] = Factor(["EC", "DC"] * n)
-data["mu"] = Var(np.ravel(np.column_stack([mu_ec, mu_dc])))
-mu_test = WilcoxonSignedRank(
-    y="mu",
-    x="model",
-    c1="EC",
-    c0="DC",
-    match="subject",
-    data=data,
-    tail=0,
-)
-
-print(mu_test)
-print(f"{mu_test.p:.3e}")
 
 # %%
