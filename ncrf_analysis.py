@@ -1,5 +1,6 @@
 from eelbrain import *
 import os
+import numpy as np
 
 def create_ncrf_dataset(mod, path): 
 
@@ -97,4 +98,61 @@ def ncrf_stats(
 
     else:
         raise ValueError("comparison must be 'consition' or 'paired'.")
+
+
+def source_l1_timecourse(ndvar):
+    """
+    Compute the L1 norm across sources at each time point.
+    """
+    x = ndvar.x
+    if x.ndim == 3:
+        x = np.linalg.norm(x, axis=1)
+
+    return np.asarray(ndvar.time.times), np.abs(x).sum(axis=0)
+
+
+def get_contrast(data, subject, mod):
+    """
+    Return the contrast NDVar for one subject. 
+    """
+    dsub = data.sub(f"subject == '{subject}'")
+
+    if mod == "effect":
+        return dsub.sub("animacy == 'contrast'")["ncrf"][0]
+
+    if mod == "dummy":
+        anim = dsub.sub("animacy == 'animate'")["ncrf"][0]
+        inanim = dsub.sub("animacy == 'inanimate'")["ncrf"][0]
+        return anim - inanim
+
+    raise ValueError("mod must be 'effect' or 'dummy'")
+
+
+def compute_l1(data, mod):
+    """
+    Compute contrast L1 time courses for all subjects.
+    """
+    times = None
+    values = {}
+
+    for subject in sorted(set(data["subject"])):
+        contrast = get_contrast(data, subject, mod)
+        current_times, l1 = source_l1_timecourse(contrast)
+
+        if times is None:
+            times = current_times
+        elif not np.allclose(times, current_times):
+            raise ValueError(f"L1 time axis mismatch ")
+
+        values[subject] = l1
+
+    return times, values
+
+
+def significant_source_timecourse(result):
+    """
+    Count sources with p < 0.05 at each time point.
+    """
+    return (np.asarray(result.p.time.times),np.sum(result.p.x < 0.05, axis=0))
+    
 
