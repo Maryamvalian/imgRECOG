@@ -99,7 +99,7 @@ def ncrf_stats(
     else:
         raise ValueError("comparison must be 'consition' or 'paired'.")
 
-
+# Sparsity Analysis
 def source_l1_timecourse(ndvar):
     """
     Compute the L1 norm across sources at each time point.
