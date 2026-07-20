@@ -97,7 +97,7 @@ df = pd.DataFrame({
     "Ratio": log_ratio,
 })
 
-fig, axes = plt.subplots(1, 2, figsize=(8, 7), width_ratios=[1.3, 1])
+fig, axes = plt.subplots(1, 2, figsize=(8, 7), width_ratios=[1.2, 1])
 
 # Plot Mu values
 ax = axes[0]
@@ -117,7 +117,7 @@ ax.set_yticks(np.arange(1, 31))
 ax.set_yticklabels([])
 ax.invert_yaxis()
 
-ax.set_title("A)")
+ax.set_title("(A)")
 
 # Plot Mu ratio
 ax = axes[1]
@@ -140,7 +140,7 @@ ax.grid(axis="y", alpha=0.3)
 ax.set_xlabel("Subjects")
 ax.set_xticklabels([])
 
-ax.set_title("B)")
+ax.set_title("(B)")
 
 plt.tight_layout()
 plt.savefig(fig_dir / "mu.pdf")
