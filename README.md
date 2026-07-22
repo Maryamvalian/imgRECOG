@@ -114,11 +114,3 @@ The project relies on several Python packages, including
 
 Additional dependencies may be required depending on your environment.
 
----
-
-## Citation
-
-If you use this repository in your research, please cite:
-
-- The NOD-MEG OpenNeuro dataset.
-- This repository.
