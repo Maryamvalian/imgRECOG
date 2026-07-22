@@ -59,7 +59,7 @@ to generate
 for every subject. The generated files include:
 
 - sub-XX-bem-sol.fif
-- sub-XX-<session>-trans.fif
+- sub-XX-ImageNet0X-trans.fif
 - sub-XX-vol-7-src.fif
 
 ### 4. Estimate NCRFs
