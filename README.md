@@ -19,7 +19,7 @@ Download the complete dataset, including:
 - MEG recordings
 - Structural MRI (T1-weighted images)
 
-The dataset follows the BIDS format and is publicly available through OpenNeuro. :contentReference[oaicite:0]{index=0}
+The dataset follows the BIDS format and is publicly available through OpenNeuro. 
 
 ---
 
