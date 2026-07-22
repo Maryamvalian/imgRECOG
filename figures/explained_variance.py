@@ -13,7 +13,6 @@
 # ---
 
 # %%
-import os
 import sys
 from pathlib import Path
 import numpy as np
@@ -21,8 +20,6 @@ import matplotlib.pyplot as plt
 from eelbrain import load,Var
 import pandas as pd
 import seaborn as sns
-sys.path.append(str(Path.cwd().parent))
-from utils import loftus_masson
 from eelbrain.test import WilcoxonSignedRank
 
 # %%
@@ -90,7 +87,7 @@ EC_EV_train = df_wide["EC Training EV"].to_numpy()
 DC_EV_test = df_wide["DC Cross-validated EV"].to_numpy()
 EC_EV_test = df_wide["EC Cross-validated EV"].to_numpy()
 
-# CI: Uncertainty of the mean after removing between-subject variability 
+
 test_data = np.column_stack([
     DC_EV_test,
     EC_EV_test,
@@ -101,8 +98,12 @@ train_data = np.column_stack([
     EC_EV_train,
 ])
 
-means_train, sem_within_train, ci_train = loftus_masson(train_data)
-means_test, sem_within_test, ci_test = loftus_masson(test_data)
+
+if np.any(DC_EV_train <= 0) or np.any(EC_EV_train <= 0):
+    raise ValueError("Training EV contains zero or negative values.")
+
+if np.any(DC_EV_test <= 0) or np.any(EC_EV_test <= 0):
+    raise ValueError("Cross-validated EV contains zero or negative values.")
 
 train_ratio = EC_EV_train / DC_EV_train
 test_ratio = EC_EV_test / DC_EV_test
@@ -110,9 +111,11 @@ test_ratio = EC_EV_test / DC_EV_test
 train_log = np.log(train_ratio)
 test_log = np.log(test_ratio)
 
+# Non-parametric statistical test
+
 ev_test_result = WilcoxonSignedRank( Var(EC_EV_test), Var(DC_EV_test), tail=0)
 ev_train_result =  WilcoxonSignedRank( Var(EC_EV_train), Var(DC_EV_train), tail=0)
-print(f"Test data: {ev_test_result},\n Train data {ev_train_result}")
+print(f" Test data: {ev_test_result},\n Train data {ev_train_result}")
 
 # %%
 # Plot
