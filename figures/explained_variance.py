@@ -18,11 +18,12 @@ import sys
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
-from eelbrain import load
+from eelbrain import load,Var
 import pandas as pd
 import seaborn as sns
 sys.path.append(str(Path.cwd().parent))
-from utils import loftus_masson_ci
+from utils import loftus_masson
+from eelbrain.test import WilcoxonSignedRank
 
 # %%
 # Data locations
@@ -31,15 +32,16 @@ base_dir = Path("/Users/maryamvalian/Code/imgRECOG/models/samesize/1session")
 # Save figure
 fig_dir = Path("figures")
 fig_dir.mkdir(parents=True, exist_ok=True)
-fig_file = fig_dir / "EV_paired_train_test.png"
+
 
 # Configure the matplotlib figure style
 FONT = 'Arial'
-FONT_SIZE = 14
+FONT_SIZE = 16
 RC = {
     'figure.dpi': 100,
     'savefig.dpi': 300,
     'savefig.transparent': True,
+    'savefig.bbox': "tight",
     # Font
     'font.family': 'sans-serif',
     'font.sans-serif': FONT,
@@ -99,364 +101,265 @@ train_data = np.column_stack([
     EC_EV_train,
 ])
 
-means_train, sem_within_train, ci_train = loftus_masson_ci(train_data)
-means_test, sem_within_test, ci_test = loftus_masson_ci(test_data)
+means_train, sem_within_train, ci_train = loftus_masson(train_data)
+means_test, sem_within_test, ci_test = loftus_masson(test_data)
 
+train_ratio = EC_EV_train / DC_EV_train
+test_ratio = EC_EV_test / DC_EV_test
+
+train_log = np.log(train_ratio)
+test_log = np.log(test_ratio)
+
+ev_test_result = WilcoxonSignedRank( Var(EC_EV_test), Var(DC_EV_test), tail=0)
+ev_train_result =  WilcoxonSignedRank( Var(EC_EV_train), Var(DC_EV_train), tail=0)
+print(f"Test data: {ev_test_result},\n Train data {ev_train_result}")
 
 # %%
-#plot 
+# Plot
+ev_plot_df = pd.DataFrame({
+    "Subject": np.tile(df_wide["Subject"].to_numpy(), 4),
 
+    "Dataset": (
+        ["Training"] * len(df_wide)
+        + ["Training"] * len(df_wide)
+        + ["Cross-validated"] * len(df_wide)
+        + ["Cross-validated"] * len(df_wide)
+    ),
+
+    "Coding": (
+        ["DC"] * len(df_wide)
+        + ["EC"] * len(df_wide)
+        + ["DC"] * len(df_wide)
+        + ["EC"] * len(df_wide)
+    ),
+
+    "EV": np.concatenate([
+        DC_EV_train,
+        EC_EV_train,
+        DC_EV_test,
+        EC_EV_test,
+    ]),
+})
+
+
+plot_df = pd.DataFrame({
+    "log_ratio": np.concatenate([
+        train_log,
+        test_log,
+    ]),
+
+    "Dataset": (
+        ["Training"] * len(train_log)
+        + ["Cross-validated"] * len(test_log)
+    ),
+})
+
+
+coding_palette = {
+    "DC": "#ff7f0e",
+    "EC": "#1f77b4",
+}
+
+dataset_palette = {
+    "Training": "#66C56C",
+    "Cross-validated": "#E76F51",
+}
+
+datasets = [
+    "Training",
+    "Cross-validated",
+]
+
+# Combined figure
 fig, axes = plt.subplots(
     1,
     2,
-    figsize=(8, 5),
-    sharey=True,
-)
-
-# Find common limits across train and test
-all_lower = [
-    means_train[0] - ci_train,
-    means_train[1] - ci_train,
-    means_test[0] - ci_test,
-    means_test[1] - ci_test,
-]
-
-all_upper = [
-    means_train[0] + ci_train,
-    means_train[1] + ci_train,
-    means_test[0] + ci_test,
-    means_test[1] + ci_test,
-]
-
-ymin = min(all_lower)
-ymax = max(all_upper)
-
-padding = 0.05 * (ymax - ymin)
-
-# Training
-axes[0].bar(
-    ["DC", "EC"],
-    means_train,
-    yerr=[sem_within_train, sem_within_train],
-    capsize=6,
-    color=["#ff7f0e", "#1f77b4"],
-    edgecolor="black",
-)
-
-axes[0].set_ylabel("Explained Variance")
-axes[0].set_title("Training\nMean ± (within-subject SEM)")
-
-# Test
-axes[1].bar(
-    ["DC", "EC"],
-    means_test,
-    yerr=[sem_within_test, sem_within_test],
-    capsize=6,
-    color=["#ff7f0e", "#1f77b4"],
-    edgecolor="black",
-)
-
-axes[1].set_title("Test\nMean ± (within-subject SEM)")
-
-# Same limits for both panels
-axes[0].set_ylim(ymin - padding, ymax + padding)
-axes[1].set_ylim(ymin - padding, ymax + padding)
-
-plt.tight_layout()
-plt.show()
-
-# %%
-# Compute paired differences
-df_diff = pd.DataFrame({
-    "Subject": df_wide["Subject"],
-    "Training": df_wide["EC Training EV"] - df_wide["DC Training EV"],
-    "Cross-validated": df_wide["EC Cross-validated EV"] - df_wide["DC Cross-validated EV"],
-})
-
-# Long format
-df_plot = df_diff.melt(
-    id_vars="Subject",
-    var_name="Group",
-    value_name="Difference",
-)
-
-plt.figure(figsize=(5, 6))
-
-sns.swarmplot(
-    data=df_plot,
-    x="Group",
-    y="Difference",
-    hue="Group",
-    palette={
-        "Training": "#74C476",
-        "Cross-validated": "#E76F51",
+    figsize=(8, 6),
+    gridspec_kw={
+        "width_ratios": [1.4, 1],
+        "wspace": 0.28,
     },
-    size=8,
-    legend=False,
 )
 
-plt.axhline(0, color="k", linestyle="--", linewidth=1, alpha=0.5)
-plt.ylabel("EV Difference (EC − DC)")
-plt.xlabel("")
-plt.title("Subject-wise EV Differences")
+ax_ev = axes[0]
+ax_ratio = axes[1]
 
-plt.tight_layout()
-plt.savefig("figures/EV_difference_swarm.png", dpi=300, bbox_inches="tight")
-plt.show()
+# Panel A --------------
 
-# %% [markdown]
-# # Contribution of Contrast : 
-# <br><hr><br><br>
+sns.violinplot(
+    data=ev_plot_df,
+    x="Dataset",
+    y="EV",
+    hue="Coding",
+    order=datasets,
+    hue_order=["DC", "EC"],
+    palette=coding_palette,
+    inner="box",
+    cut=0.0,
+    linewidth=0.7,
+    saturation=0.8,
+    split=True,
+    ax=ax_ev,
+    legend=True,
+    gap=0.08,
+    inner_kws=dict(
+        box_width=6,      
+        whis_width=1.5,      
+        color="black",
+    ),
+)
 
-# %%
-import copy
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from pathlib import Path
 
-# Data locations
-base_dir = Path("/Users/maryamvalian/Code/imgRECOG/models/samesize/1session")
-effect_dir = base_dir / "effect"
+offset = 0.2 # horizontal space between ec and dc subject points
+rng = np.random.default_rng(42)
 
-# Where to save the figure
-fig_dir = Path("figures")
-fig_dir.mkdir(parents=True, exist_ok=True)
-fig_file = fig_dir / "EC_contrast_RF_contribution_train400test400.png"
+for group_position, dataset in enumerate(datasets):
 
-rows = []
-
-for i in range(1, 31):
-    subject = f"sub-{i:02d}"
-
-    # chunk 1 model, chunk 2 test data/model
-    m1, m2 = [
-        load.unpickle(effect_dir / f"{chunk}-2-{subject}.pickle")
-        for chunk in (1, 2)
+    sub_df = ev_plot_df.loc[
+        ev_plot_df["Dataset"] == dataset
     ]
 
-    # ---------- Full EC EV ----------
-    ev_full_train = m1.explained_var
-    ev_full_test = m1.compute_explained_variance(m2._data)
+    wide = sub_df.pivot(
+        index="Subject",
+        columns="Coding",
+        values="EV",
+    )
 
-    # ---------- General-only EC ----------
-    m1_general_only = copy.deepcopy(m1)
+    x_dc = group_position - offset
+    x_ec = group_position + offset
 
-    # theta columns are [general coefficients | contrast coefficients]
-    n_cols = m1_general_only.theta.shape[1] // 2
+    
+    # Paired subject lines
+    for _, row in wide.iterrows():
 
-    # set contrast RF coefficients to zero
-    m1_general_only.theta[:, n_cols:] = 0
+        ax_ev.plot(
+            [x_dc, x_ec],
+            [row["DC"], row["EC"]],
+            color="0.30",
+            alpha=0.70,
+            linewidth=0.8,
+            zorder=3,
+        )
 
-    ev_general_train = m1_general_only.compute_explained_variance(m1._data)
-    ev_general_test = m1_general_only.compute_explained_variance(m2._data)
+    
+    # subject points
+    dc_jitter = rng.uniform(
+        -0.018,
+        0.018,
+        len(wide),
+    )
 
-    rows.append({
-        "Subject": subject,
+    ec_jitter = rng.uniform(
+        -0.018,
+        0.018,
+        len(wide),
+    )
 
-        "Full EC Training EV": ev_full_train,
-        "General-only Training EV": ev_general_train,
-        "Contrast Contribution Training": ev_full_train - ev_general_train,
+    ax_ev.scatter(
+        x_dc + dc_jitter,
+        wide["DC"].to_numpy(),
+        color=coding_palette["DC"],
+        edgecolor="white",
+        linewidth=0.4,
+        s=30,
+        zorder=4,
+    )
 
-        "Full EC Cross-validated EV": ev_full_test,
-        "General-only Cross-validated EV": ev_general_test,
-        "Contrast Contribution Cross-validated": ev_full_test - ev_general_test,
-    })
+    ax_ev.scatter(
+        x_ec + ec_jitter,
+        wide["EC"].to_numpy(),
+        color=coding_palette["EC"],
+        edgecolor="white",
+        linewidth=0.4,
+        s=30,
+        zorder=4,
+    )
 
+ax_ev.set_xlabel("")
+ax_ev.set_ylabel("Explained Variance")
 
-# DataFrame
-df_ec = pd.DataFrame(rows)
+ax_ev.set_xticks([0, 1])
+ax_ev.set_xticklabels([
+    "Training",
+    "Cross-validated",
+])
 
-display(df_ec)
+ax_ev.set_xlim(-0.55, 1.55)
 
-# Long format for plot
-df_plot = df_ec.melt(
-    id_vars="Subject",
-    value_vars=[
-        "Contrast Contribution Training",
-        "Contrast Contribution Cross-validated",
-    ],
-    var_name="Group",
-    value_name="EV Contribution",
+# edit legend
+handles, labels = ax_ev.get_legend_handles_labels()
+
+ax_ev.legend(
+    handles[:2],
+    ["NCRF-DC", "NCRF-EC"],
+    title=None,
+    frameon=False,
+    loc="upper right",
+    fontsize=FONT_SIZE-3
 )
 
-# Plot
-plt.figure(figsize=(5, 6))
-
+# Panel B
 sns.swarmplot(
-    data=df_plot,
-    x="Group",
-    y="EV Contribution",
-    size=8,
-    hue="Group",
-    palette={
-        "Contrast Contribution Training": "#74C476",
-        "Contrast Contribution Cross-validated": "#E76F51",
-    },
-    legend=False,
-)
-
-plt.axhline(0, color="k", linestyle="--", alpha=0.5, linewidth=1)
-plt.ylabel("EV_fullModel - EV_generalOnly")
-plt.xlabel("")
-plt.title("EC: Contribution of Animacy Contrast RF")
-plt.xticks(rotation=15)
-plt.tight_layout()
-
-plt.savefig(fig_file, bbox_inches="tight")
-plt.show()
-
-print("Mean training contribution:",
-      df_ec["Contrast Contribution Training"].mean())
-
-print("Mean cross-validated contribution:",
-      df_ec["Contrast Contribution Cross-validated"].mean())
-
-# %%
-df_general_plot = df_ec.melt(
-    id_vars="Subject",
-    value_vars=[
-        "General-only Training EV",
-        "General-only Cross-validated EV",
-    ],
-    var_name="Group",
-    value_name="EV",
-)
-
-plt.figure(figsize=(5, 6))
-
-sns.swarmplot(
-    data=df_general_plot,
-    x="Group",
-    y="EV",
-    size=8,
-    hue="Group",
-    palette={
-        "General-only Training EV": "#74C476",
-        "General-only Cross-validated EV": "#E76F51",
-    },
-    legend=False,
-)
-
-plt.axhline(0, color="k", linestyle="--", alpha=0.5, linewidth=1)
-plt.ylabel("EV")
-plt.xlabel("")
-plt.title("EC: General Visual Response EV")
-plt.xticks(rotation=15)
-plt.tight_layout()
-
-plt.savefig(fig_dir / "EC_general_only_EV_train_test.png", bbox_inches="tight")
-plt.show()
-
-print("Mean general-only training EV:",
-      df_ec["General-only Training EV"].mean())
-
-print("Mean general-only cross-validated EV:",
-      df_ec["General-only Cross-validated EV"].mean())
-
-# %%
-import copy
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from pathlib import Path
-
-base_dir = Path("/Users/maryamvalian/Code/imgRECOG/models/samesize/1session")
-effect_dir = base_dir / "effect"
-
-fig_dir = Path("figures")
-fig_dir.mkdir(parents=True, exist_ok=True)
-
-rows = []
-
-for i in range(1, 31):
-    subject = f"sub-{i:02d}"
-
-    m1, m2 = [
-        load.unpickle(effect_dir / f"{chunk}-2-{subject}.pickle")
-        for chunk in (1, 2)
-    ]
-
-    n_cols = m1.theta.shape[1] // 2
-
-    # Full model
-    ev_full_train = m1.explained_var
-    ev_full_test = m1.compute_explained_variance(m2._data)
-
-    # General-only model: remove contrast RF
-    m_general = copy.deepcopy(m1)
-    m_general.theta[:, n_cols:] = 0
-
-    ev_general_train = m_general.compute_explained_variance(m1._data)
-    ev_general_test = m_general.compute_explained_variance(m2._data)
-
-    # Contrast-only model: remove general RF
-    m_contrast = copy.deepcopy(m1)
-    m_contrast.theta[:, :n_cols] = 0
-
-    ev_contrast_train = m_contrast.compute_explained_variance(m1._data)
-    ev_contrast_test = m_contrast.compute_explained_variance(m2._data)
-
-    rows.append({
-        "Subject": subject,
-
-        "Full Training EV": ev_full_train,
-        "General-only Training EV": ev_general_train,
-        "Contrast-only Training EV": ev_contrast_train,
-
-        "Full Cross-validated EV": ev_full_test,
-        "General-only Cross-validated EV": ev_general_test,
-        "Contrast-only Cross-validated EV": ev_contrast_test,
-
-        "Drop from removing contrast Training": ev_full_train - ev_general_train,
-        "Drop from removing contrast Cross-validated": ev_full_test - ev_general_test,
-    })
-
-df_ec_parts = pd.DataFrame(rows)
-display(df_ec_parts)
-
-# %%
-df_plot = df_ec_parts.melt(
-    id_vars="Subject",
-    value_vars=[
-        "Full Training EV",
-        "General-only Training EV",
-        "Contrast-only Training EV",
-        "Full Cross-validated EV",
-        "General-only Cross-validated EV",
-        "Contrast-only Cross-validated EV",
-    ],
-    var_name="Condition",
-    value_name="EV",
-)
-
-plt.figure(figsize=(8, 14))
-
-sns.swarmplot(
-    data=df_plot,
-    x="Condition",
-    y="EV",
-    hue="Condition",
+    data=plot_df,
+    x="Dataset",
+    y="log_ratio",
+    hue="Dataset",
+    order=datasets,
+    palette=dataset_palette,
     size=7,
     legend=False,
+    ax=ax_ratio,
 )
 
-plt.axhline(0, color="k", linestyle="--", alpha=0.5, linewidth=1)
-plt.ylabel("EV")
-plt.xlabel("")
-plt.title("EC: Full vs General-only vs Contrast-only EV")
-plt.xticks(rotation=35, ha="right")
-plt.tight_layout()
 
-plt.savefig(fig_dir / "EC_full_general_contrast_EV.png", bbox_inches="tight")
+# Median lines
+for i, dataset in enumerate(datasets):
+
+    median_value = plot_df.loc[
+        plot_df["Dataset"] == dataset,
+        "log_ratio",
+    ].median()
+
+    ax_ratio.hlines(
+        median_value,
+        i - 0.30,
+        i + 0.30,
+        colors="black",
+        linewidth=1.5,
+        zorder=4,
+    )
+
+
+# Equal-EV reference
+ax_ratio.axhline(
+    0,
+    linestyle="--",
+    color="gray",
+    linewidth=1,
+    zorder=1,
+)
+
+
+# Panel B formatting
+ax_ratio.set_ylabel(
+    r"$\ln(\mathrm{EV}_{\mathrm{EC}}/"
+    r"\mathrm{EV}_{\mathrm{DC}})$", labelpad=-11,fontsize= FONT_SIZE-1
+)
+
+ax_ratio.set_xlabel("")
+
+ax_ratio.set_xticks([0, 1])
+
+ax_ratio.set_xticklabels([
+    "Training",
+    "Cross-\nvalidated",
+])
+
+
+# Panel labels
+ax_ev.text( 0, 1.07, "(A)", transform=ax_ev.transAxes, fontsize=FONT_SIZE,  va="top")
+ax_ratio.text( 0, 1.07,  "(B)", transform=ax_ratio.transAxes, fontsize=FONT_SIZE, va="top")
+
+fig.savefig(fig_dir / "EV.pdf")
+
 plt.show()
-
-# %%
-
-# %%
-
-# %%
-
-# %%
