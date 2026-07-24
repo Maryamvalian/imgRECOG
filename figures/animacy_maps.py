@@ -43,6 +43,7 @@ RC = {
     'figure.dpi': 100,
     'savefig.dpi': 300,
     'savefig.transparent': True,
+    'savefig.bbox': "tight",
     # Font
     'font.family': 'sans-serif',
     'font.sans-serif': FONT,
@@ -57,10 +58,14 @@ RC = {
 }
 plt.rcParams.update(RC)
 
-# %%
+
 # Load ncrf models
 data_ec = create_ncrf_dataset(mod="effect", path=ec_dir) 
 data_dc = create_ncrf_dataset(mod="dummy", path=dc_dir) 
+
+# Scale only the EC contrast NCRFs
+contrast_mask = data_ec["animacy"] == "contrast"
+data_ec["ncrf"][contrast_mask] *= 2
 
 # Statistical Tests
 result_dc = ncrf_stats(data=data_dc, comparison="paired", mod="dummy")
@@ -69,40 +74,59 @@ result_ec = ncrf_stats(data=data_ec, comparison="condition", mod="effect", condi
 diff_dc = result_dc.masked_difference()
 diff_ec = result_ec.masked_difference()
 
+data_ec.head()
+
 # %%
-TIME_MARKERS = (120, 150, 250, 350)
+TIME_MARKERS = (110, 150, 240, 330)
 
-# Plot Butterfly comparison 
-fig, axes = plt.subplots(2, 1, figsize=(9, 7), sharex=True)
+# Compute global y-limits
+y_dc = diff_dc.norm("space").x
+y_ec = diff_ec.norm("space").x
 
-for ax, diff, title in zip(
+ymin = min(y_dc.min(), y_ec.min())
+ymax = max(y_dc.max(), y_ec.max())
+
+# Plot Butterfly comparison
+fig, axes = plt.subplots(
+    2, 1,
+    figsize=(7, 7),
+    sharex=True,
+    sharey=True,
+)
+
+for ax, y, times, title in zip(
     axes,
-    [diff_dc, diff_ec],
-    ["NCRF-DC", "NCRF-EC"],
+    [y_dc, y_ec],
+    [diff_dc.time.times, diff_ec.time.times],
+    ["(A) NCRF-DC", "(B) NCRF-EC"],
 ):
-    y = diff.norm("space").x
-    times = diff.time.times
-
     ax.plot(times, y.T, color="k", linewidth=0.8)
 
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, pos: f"{v / 1e-12:.1f}"))
-    ax.set_ylabel("NCRF")
+    # Same y-axis limits for both panels
+    ax.set_ylim(ymin, ymax)
+
+    ax.yaxis.set_major_formatter(
+        FuncFormatter(lambda v, pos: f"{v / 1e-12:.1f}")
+    )
+
+    ax.set_ylabel("Current dipole moment (pA·m)")
     ax.set_title(title)
 
     for t in TIME_MARKERS:
         ax.axvline(t, color="#1f77b4", linewidth=1)
-
+    """
     ax.text(
-        -0.10,
+        0.0,
         1.02,
-        r"$1e^{-12}$",
+        r"$\times 10^{-12}$",
         transform=ax.transAxes,
     )
+    """
 
 axes[-1].set_xlabel("Time (ms)")
 
 plt.tight_layout()
-plt.savefig("figures/dc_ec_BF.svg")
+plt.savefig("figures/BF.pdf")
 plt.show()
 
 # %%
@@ -184,5 +208,3 @@ fig.savefig(fig_dir / "DC_EC_GlassBrain.png")
 fig.savefig(fig_dir / "DC_EC_GlassBrain.svg")
 fig.savefig(fig_dir / "DC_EC_GlassBrain.pdf")
        
-
-# %%
