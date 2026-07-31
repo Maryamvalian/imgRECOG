@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 from eelbrain import load,Var
 import pandas as pd
 import seaborn as sns
+from matplotlib.lines import Line2D
 from eelbrain.test import WilcoxonSignedRank
 
 # %%
@@ -136,7 +137,7 @@ ev_plot_df = pd.DataFrame({
         + ["EC"] * len(df_wide)
     ),
 
-    "EV": np.concatenate([
+    "EV": 100*np.concatenate([
         DC_EV_train,
         EC_EV_train,
         DC_EV_test,
@@ -163,6 +164,11 @@ coding_palette = {
     "EC": "#1f77b4",
 }
 
+violin_palette={
+    "DC": "white",
+    "EC": "white"}
+
+
 dataset_palette = {
     "Training": "#66C56C",
     "Cross-validated": "#E76F51",
@@ -177,7 +183,7 @@ datasets = [
 fig, axes = plt.subplots(
     1,
     2,
-    figsize=(8, 6),
+    figsize=(8, 7),
     gridspec_kw={
         "width_ratios": [1.4, 1],
         "wspace": 0.28,
@@ -196,7 +202,7 @@ sns.violinplot(
     hue="Coding",
     order=datasets,
     hue_order=["DC", "EC"],
-    palette=coding_palette,
+    palette=violin_palette,
     inner="box",
     cut=0.0,
     linewidth=0.7,
@@ -279,27 +285,49 @@ for group_position, dataset in enumerate(datasets):
     )
 
 ax_ev.set_xlabel("")
-ax_ev.set_ylabel("Explained Variance")
+ax_ev.set_ylabel("Explained Variance %")
 
 ax_ev.set_xticks([0, 1])
 ax_ev.set_xticklabels([
     "Training",
-    "Cross-validated",
+    "Test",
 ])
 
 ax_ev.set_xlim(-0.55, 1.55)
-
+ax_ev.set(yscale="log")
 # edit legend
-handles, labels = ax_ev.get_legend_handles_labels()
+
+legend_handles = [
+    Line2D(
+        [0], [0],
+        marker='o',
+        color='none',
+        markerfacecolor=coding_palette["DC"],
+        markeredgecolor=coding_palette["DC"],
+        markersize=6,
+        label="NCRF-DC",
+    ),
+    Line2D(
+        [0], [0],
+        marker='o',
+        color='none',
+        markerfacecolor=coding_palette["EC"],
+        markeredgecolor=coding_palette["EC"],
+        markersize=6,
+        label="NCRF-EC",
+    ),
+]
 
 ax_ev.legend(
-    handles[:2],
-    ["NCRF-DC", "NCRF-EC"],
-    title=None,
-    frameon=False,
+    handles=legend_handles,
+    frameon=True,
     loc="upper right",
-    fontsize=FONT_SIZE-3
+    prop={
+        "size": FONT_SIZE - 7,
+        "weight": "bold",
+    },
 )
+
 
 # Panel B
 sns.swarmplot(
@@ -355,7 +383,7 @@ ax_ratio.set_xticks([0, 1])
 
 ax_ratio.set_xticklabels([
     "Training",
-    "Cross-\nvalidated",
+    "Test",
 ])
 
 
@@ -363,6 +391,20 @@ ax_ratio.set_xticklabels([
 ax_ev.text( 0, 1.07, "(A)", transform=ax_ev.transAxes, fontsize=FONT_SIZE,  va="top")
 ax_ratio.text( 0, 1.07,  "(B)", transform=ax_ratio.transAxes, fontsize=FONT_SIZE, va="top")
 
+#
+
+
 fig.savefig(fig_dir / "EV.pdf")
 
 plt.show()
+
+diff = EC_EV_test - DC_EV_test
+print(f"Test diff\nmedian={np.median(diff)}")
+print(np.sum(diff > 0), np.sum(diff < 0))
+diff = EC_EV_train - DC_EV_train
+print(f"Train diff \nMedian={np.median(diff)}")
+print(np.sum(diff > 0), np.sum(diff < 0))
+print("Test DC median:", np.median(DC_EV_test))
+print("Test EC median:", np.median(EC_EV_test))
+print("Train DC median:", np.median(DC_EV_train))
+print("Train EC median:", np.median(EC_EV_train))
