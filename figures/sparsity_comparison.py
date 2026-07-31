@@ -124,18 +124,9 @@ def loftus_masson_timecourse(values_ec, values_dc):
     return mean_ec, mean_dc, sem_ec, sem_dc
 
 # Compute non-zero counts from original models
-def compute_nonzero_counts_from_models(
-    model_dir,
-    mod,
-    atol=0.0,
-):
+def compute_nonzero_counts_from_models( model_dir, mod, atol=0.0):
+    
     model_dir = Path(model_dir)
-
-    if mod not in {"effect", "dummy"}:
-        raise ValueError(
-            "mod must be either 'effect' or 'dummy'."
-        )
-
     model_files = sorted(
         model_dir.glob("sub-*-ncrf.pickle")
     )
@@ -166,20 +157,10 @@ def compute_nonzero_counts_from_models(
             )
 
         if mod == "effect":
+            _, contrast = kernels # No need to multiply by 2 here because scaling dosen't affect zero
 
-            # Effect coding:
-            # general, contrast
-            _, contrast = kernels
-
-            # No need to multiply by 2 here because scaling
-            # does not change whether a source is exactly zero.
-
-        else:
-
-            # Dummy coding:
-            # inanimate, animate
+        else: #dummy
             inanimate, animate = kernels
-
             contrast = animate - inanimate
 
         # Norm over the three dipole components
@@ -195,21 +176,13 @@ def compute_nonzero_counts_from_models(
 
         subject_times = source_norm.time.times
 
-        subject_counts = np.sum(
-            values > atol,
-            axis=0,
-        )
+        subject_counts = np.sum(values > atol, axis=0)
 
         times_by_subject[subject] = subject_times
         counts_by_subject[subject] = subject_counts
         n_sources_by_subject[subject] = values.shape[0]
 
-    return (
-        times_by_subject,
-        counts_by_subject,
-        n_sources_by_subject,
-    )
-
+    return (times_by_subject,counts_by_subject, n_sources_by_subject)
 
 
 # Load NCRF datasets for L1 analysis
@@ -221,7 +194,6 @@ data_dc = create_ncrf_dataset( mod="dummy", path=dc_dir)
 # Scale only the EC contrast NCRFs for direct magnitude comparison
 contrast_mask = data_ec["animacy"] == "contrast"
 data_ec["ncrf"][contrast_mask] *= 2
-
 
 
 # Panel A: L1 norm
@@ -264,15 +236,7 @@ l1_dc = np.stack([
     for subject in subjects_l1
 ])
 
-(
-    mean_ec,
-    mean_dc,
-    sem_ec,
-    sem_dc,
-) = loftus_masson_timecourse(
-    l1_ec,
-    l1_dc,
-)
+(mean_ec,mean_dc, sem_ec, sem_dc) = loftus_masson_timecourse(l1_ec,l1_dc)
 
 
 
@@ -298,11 +262,7 @@ l1_dc = np.stack([
     atol=0.0,
 )
 
-
-subjects_nonzero = sorted(
-    set(ec_counts_by_subject)
-    & set(dc_counts_by_subject)
-)
+subjects_nonzero = sorted(set(ec_counts_by_subject)& set(dc_counts_by_subject))
 
 if not subjects_nonzero:
     raise ValueError(
