@@ -102,7 +102,7 @@ directory.
 
 ## Requirements
 
-The project relies on several Python packages, including
+The project relies on several Software packages, including
 
 - Python
 - MNE-Python
