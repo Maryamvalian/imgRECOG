@@ -22,6 +22,7 @@ import pandas as pd
 import seaborn as sns
 from matplotlib.lines import Line2D
 from eelbrain.test import WilcoxonSignedRank
+from scipy.stats import rankdata  #for effect size
 
 # %%
 # Data locations
@@ -183,10 +184,10 @@ datasets = [
 fig, axes = plt.subplots(
     1,
     2,
-    figsize=(8, 7),
+    figsize=(7, 5),
     gridspec_kw={
-        "width_ratios": [1.4, 1],
-        "wspace": 0.28,
+        "width_ratios": [1.2, 1],
+        "wspace": 0.38,
     },
 )
 
@@ -294,7 +295,8 @@ ax_ev.set_xticklabels([
 ])
 
 ax_ev.set_xlim(-0.55, 1.55)
-ax_ev.set(yscale="log")
+#------------------------------------logsclae
+#ax_ev.set(yscale="log")
 # edit legend
 
 legend_handles = [
@@ -304,7 +306,7 @@ legend_handles = [
         color='none',
         markerfacecolor=coding_palette["DC"],
         markeredgecolor=coding_palette["DC"],
-        markersize=6,
+        markersize=5,
         label="NCRF-DC",
     ),
     Line2D(
@@ -313,7 +315,7 @@ legend_handles = [
         color='none',
         markerfacecolor=coding_palette["EC"],
         markeredgecolor=coding_palette["EC"],
-        markersize=6,
+        markersize=5,
         label="NCRF-EC",
     ),
 ]
@@ -337,7 +339,7 @@ sns.swarmplot(
     hue="Dataset",
     order=datasets,
     palette=dataset_palette,
-    size=7,
+    size=5,
     legend=False,
     ax=ax_ratio,
 )
@@ -394,7 +396,7 @@ ax_ratio.text( 0, 1.07,  "(B)", transform=ax_ratio.transAxes, fontsize=FONT_SIZE
 #
 
 
-fig.savefig(fig_dir / "EV.pdf")
+fig.savefig(fig_dir / "EV2.pdf")
 
 plt.show()
 
@@ -408,3 +410,67 @@ print("Test DC median:", np.median(DC_EV_test))
 print("Test EC median:", np.median(EC_EV_test))
 print("Train DC median:", np.median(DC_EV_train))
 print("Train EC median:", np.median(EC_EV_train))
+
+# %%
+# Effect size - rank-biserial correlation
+# non-parametric effect size 
+# effect size on (EC- DC)
+
+
+def rank_biserial(x, y):
+    d = np.asarray(x) - np.asarray(y)             
+    d = d[d != 0]
+
+    ranks = rankdata(np.abs(d))
+
+    W_pos = ranks[d > 0].sum()
+    W_neg = ranks[d < 0].sum()
+
+    return (W_pos - W_neg) / (W_pos + W_neg)
+
+rbc_train = rank_biserial(EC_EV_train, DC_EV_train)
+rbc_test = rank_biserial(EC_EV_test, DC_EV_test)
+
+print("Train rank-biserial:", rbc_train)
+print("Test rank-biserial:", rbc_test)
+
+# %%
+# Confidence Intervals - non-parametric
+# bootstrap 95% CI of the paired median difference (EC- DC)
+
+
+def bootstrap_median_diff_ci(x, y, confidence=0.95, n_boot=10000, seed=42):
+    
+    
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    if x.shape != y.shape:
+        raise ValueError("x and y must have the same shape.")
+
+    diff = x - y
+    n = len(diff)
+    rng = np.random.default_rng(seed)
+    boot_medians = np.empty(n_boot)
+
+    for i in range(n_boot):
+        sample = rng.choice(diff, size=n, replace=True)
+        boot_medians[i] = np.median(sample)
+
+    alpha = 1 - confidence #0.05
+
+    ci_low = np.percentile(  boot_medians, 100 * alpha / 2 )     #2.5 th
+    ci_high = np.percentile( boot_medians, 100 * (1 - alpha /2 ))    #97.5 th
+
+    median_diff = np.median(diff)
+
+    return median_diff, ci_low, ci_high
+
+
+#--------
+train_median_diff, train_ci_low, train_ci_high = bootstrap_median_diff_ci(  EC_EV_train,  DC_EV_train   )
+test_median_diff, test_ci_low, test_ci_high = bootstrap_median_diff_ci(    EC_EV_test,  DC_EV_test)
+
+print( "Train median EC-DC:", train_median_diff, "95% CI:", (train_ci_low, train_ci_high))
+print( "Test median EC-DC:",  test_median_diff, "95% CI:", (test_ci_low, test_ci_high))
+
+# %%
