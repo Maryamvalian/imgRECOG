@@ -373,7 +373,7 @@ if len(times_nonzero) != len(mean_nonzero_pct_ec):
     )
 
 # Combined figure
-fig, axes = plt.subplots(2,1, figsize=(8, 8), constrained_layout=True)
+fig, axes = plt.subplots(2,1, figsize=(6, 5), constrained_layout=True)
 
 # Panel A: L1 norm
 plot_l1( axes[0], times_l1, mean_ec, sem_ec,  mean_dc, sem_dc)
@@ -391,9 +391,10 @@ for ax in axes:
     for spine in ax.spines.values():
         spine.set_visible(True)
 axes[1].set_ylim(bottom=0)
-axes[1].legend(loc="lower right")
+axes[1].legend(loc="lower right",frameon=False,fontsize=12)
+axes[0].legend(loc="upper right",frameon=False,fontsize=12)
 
-fig.savefig(fig_dir / "sparsity.pdf")
+fig.savefig(fig_dir / "sparsity2.pdf")
 plt.show()
 
 
